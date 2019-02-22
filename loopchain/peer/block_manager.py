@@ -492,7 +492,8 @@ class BlockManager:
         # Make Peer Stub List [peer_stub, ...] and get max_height of network
         # max_height: current max height
         # peer_stubs: peer stub list for block height synchronization
-        max_height, peer_stubs = self.__get_peer_stub_list(target_peer_stub)
+        max_height, peer_stubs, last_unconfirmed_block_height = self.__get_peer_stub_list(target_peer_stub)
+        max_height = max(max_height, last_unconfirmed_block_height)
         if target_height is not None:
             max_height = target_height
 
@@ -525,7 +526,7 @@ class BlockManager:
                         try:
                             result = True
 
-                            if max_height > 0 and max_height == block.header.height:
+                            if last_unconfirmed_block_height == block.header.height:
                                 self.candidate_blocks.add_block(block)
                                 result = True
 
@@ -534,7 +535,12 @@ class BlockManager:
                             else:
                                 if self.__blockchain.last_unconfirmed_block:
                                     result = self.__confirm_prev_block_by_sync(block)
-                                self.__blockchain.last_unconfirmed_block = block
+
+                                if last_unconfirmed_block_height <= 0 and block.header.height == max_height:
+                                    result = self.__add_block_by_sync(block)
+                                    self.__blockchain.last_unconfirmed_block = None
+                                else:
+                                    self.__blockchain.last_unconfirmed_block = block
 
                             if result:
                                 if block.header.height == 0:
@@ -644,6 +650,7 @@ class BlockManager:
 
         # Make Peer Stub List [peer_stub, ...] and get max_height of network
         max_height = -1      # current max height
+        last_unconfirmed_block_height = -1
         peer_stubs = []     # peer stub list for block height synchronization
 
         if ObjectManager().channel_service.is_support_node_function(conf.NodeFunction.Vote):
@@ -673,17 +680,27 @@ class BlockManager:
                         )
                         stub.target = target
 
-                    response.block_height = max(response.block_height, response.unconfirmed_block_height)
+                    height = response.block_height
+                    unconfirmed_height = response.unconfirmed_block_height
+                    if unconfirmed_height == 0 or (unconfirmed_height > 0 and (height >= unconfirmed_height)):
+                        logging.warning(f"This peer is bad. peer={target}, block_height={height},"
+                                        f"last_unconfirmed_block={unconfirmed_height}")
+                        continue
 
-                    if response.block_height > max_height:
+                    if height >= max_height:
                         # Add peer as higher than this
-                        max_height = response.block_height
+                        max_height = height
                         peer_stubs.append(stub)
+
+                    last_unconfirmed_block_height = max(unconfirmed_height, last_unconfirmed_block_height)
 
                 except Exception as e:
                     logging.warning(f"This peer has already been removed from the block height target node. {e}")
 
-        return max_height, peer_stubs
+        if last_unconfirmed_block_height <= max_height:
+            last_unconfirmed_block_height = -1
+
+        return max_height, peer_stubs, last_unconfirmed_block_height
 
     def __close_level_db(self):
         del self.__level_db
