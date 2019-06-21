@@ -183,7 +183,7 @@ class Epoch:
             tv = TransactionVerifier.new(tx.version, tx_versioner)
 
             try:
-                tv.verify(tx, self.__blockchain)
+                tv.verify_external(tx, self.__blockchain)
             except Exception as e:
                 logging.warning(f"tx hash invalid.\n"
                                 f"tx: {tx}\n"
