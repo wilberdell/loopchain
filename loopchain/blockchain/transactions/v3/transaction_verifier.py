@@ -32,3 +32,12 @@ class TransactionVerifier(BaseTransactionVerifier):
                 raise RuntimeError(f"tx({tx})\n"
                                    f"nid {hex(tx.nid)} != {nid} not match.")
             self.verify_tx_hash_unique(tx, blockchain)
+
+    def verify_external(self, tx: 'Transaction', blockchain):
+        """Test Code to verify transaction with blockchain"""
+        if blockchain:
+            nid = blockchain.find_nid()
+            if hex(tx.nid) != nid:
+                raise RuntimeError(f"tx({tx})\n"
+                                   f"nid {hex(tx.nid)} != {nid} not match.")
+            self.verify_tx_hash_unique(tx, blockchain)

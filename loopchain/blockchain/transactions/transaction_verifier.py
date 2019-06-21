@@ -31,6 +31,11 @@ class TransactionVerifier(ABC):
     def verify_loosely(self, tx: 'Transaction', blockchain=None):
         raise NotImplementedError
 
+    @abstractmethod
+    def verify_external(self, tx: 'Transaction', blockchain):
+        """Test Code to verify transaction with blockchain"""
+        raise NotImplementedError
+
     def verify_tx_hash_unique(self, tx: 'Transaction', blockchain):
         if blockchain.find_tx_by_key(tx.hash.hex()):
             exception = TransactionInvalidDuplicatedHash(f"tx({tx})\n"

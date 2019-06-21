@@ -188,6 +188,8 @@ class ConsensusSiever(ConsensusBase):
                 if need_next_call:
                     return self.__block_generation_timer.call()
 
+            block_builder.prev_votes = self.get_votes(last_block.header.hash)
+
             candidate_block = self.__build_candidate_block(block_builder, next_leader, vote_result)
             candidate_block, invoke_results = ObjectManager().channel_service.score_invoke(candidate_block)
             self._block_manager.set_invoke_results(candidate_block.header.hash.hex(), invoke_results)
@@ -253,6 +255,8 @@ class ConsensusSiever(ConsensusBase):
     def get_votes(self, block_hash: Hash32):
         try:
             prev_votes = self._block_manager.candidate_blocks.get_votes(block_hash)
+            if prev_votes is None:
+                return []
             prev_votes_list = prev_votes.votes
         except KeyError:
             prev_votes_dumped = self._blockchain.find_confirm_info_by_hash(block_hash)

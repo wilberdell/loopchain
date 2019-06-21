@@ -46,6 +46,14 @@ class BlockVerifier(ABC):
         self.verify_transactions_loosely(block, blockchain)
         return self.verify_common(block, prev_block, generator, **kwargs)
 
+    def verify_external(self, block: 'Block', blockchain):
+        """Test Code to verify block with blockchain"""
+        for tx in block.body.transactions.values():
+            tv = TransactionVerifier.new(tx.version, self._tx_versioner, self._raise_exceptions)
+            tv.verify_external(tx, blockchain)
+            if not self._raise_exceptions:
+                self.exceptions.extend(tv.exceptions)
+
     def verify_common(self, block: 'Block', prev_block: 'Block', generator: 'ExternalAddress'=None, **kwargs):
         header: BlockHeader = block.header
 

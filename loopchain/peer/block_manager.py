@@ -15,10 +15,11 @@
 
 import json
 import logging
+import multiprocessing as mp
 import shutil
 import threading
 import traceback
-from concurrent.futures import ThreadPoolExecutor, Future
+from concurrent.futures import ThreadPoolExecutor, Future, ProcessPoolExecutor
 from collections import defaultdict
 from typing import TYPE_CHECKING, Dict, DefaultDict
 
@@ -44,6 +45,11 @@ from loopchain.utils.message_queue import StubCollection
 
 if TYPE_CHECKING:
     from loopchain.channel.channel_service import ChannelService
+
+
+def verify_transactions(block: Block, block_version_, tx_versioner):
+    block_verifier_ = BlockVerifier.new(block_version_, tx_versioner)
+    block_verifier_.verify_transactions(block)
 
 
 class BlockManager:
@@ -82,6 +88,8 @@ class BlockManager:
         # old_block_hashes[height][new_block_hash] = old_block_hash
         self.__old_block_hashes: DefaultDict[int, Dict[Hash32, Hash32]] = defaultdict(dict)
         self.epoch: Epoch = None
+
+        self.verify_executor = ProcessPoolExecutor(max_workers=1, mp_context=mp.get_context('spawn'))
 
     @property
     def channel_name(self):
@@ -852,11 +860,26 @@ class BlockManager:
             block_verifier.invoke_func = self.__channel_service.score_invoke
             reps = self.__channel_service.get_rep_ids()
             logging.debug(f"unconfirmed_block.header({unconfirmed_block.header})")
+
+            """
             invoke_results = block_verifier.verify(unconfirmed_block,
                                                    self.__blockchain.last_block,
                                                    self.__blockchain,
                                                    self.__blockchain.last_block.header.next_leader,
                                                    reps=reps)
+            """
+            future = self.verify_executor.submit(
+                verify_transactions, unconfirmed_block, block_version, self.__blockchain.tx_versioner)
+
+            block_verifier.verify_external(unconfirmed_block, self.__blockchain)
+            future.result()
+
+            invoke_results = block_verifier.verify_common(
+                unconfirmed_block,
+                self.__blockchain.last_block,
+                self.__blockchain.last_block.header.next_leader,
+                reps=reps
+            )
         except Exception as e:
             exc = e
             logging.error(e)

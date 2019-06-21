@@ -51,3 +51,7 @@ class TransactionVerifier(BaseTransactionVerifier):
         self.verify_signature(tx)
         if blockchain:
             self.verify_tx_hash_unique(tx, blockchain)
+
+    def verify_external(self, tx: 'Transaction', blockchain):
+        """Test Code to verify transaction with blockchain"""
+        self.verify_tx_hash_unique(tx, blockchain)
