@@ -20,5 +20,6 @@ setproctitle==1.1.10
 transitions==0.6.8
 verboselogs==1.7
 websockets==6.0
+pytest==4.6.4
 yappi==0.98
 dataclasses; python_version < '3.7'

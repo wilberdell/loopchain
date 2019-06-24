@@ -12,20 +12,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING
-
 from earlgrey import *
 
 from loopchain import utils as util
+from loopchain.peer.state_borg import PeerState
 from loopchain.utils.message_queue import StubCollection
-
-if TYPE_CHECKING:
-    from loopchain.peer import PeerService
 
 
 class PeerInnerTask:
+    """ FIXME : replace
     def __init__(self, peer_service: 'PeerService'):
         self._peer_service = peer_service
+    """
+    def __init__(self):
+        self._peer_state = PeerState()
 
     @message_queue_task
     async def hello(self):
@@ -33,22 +33,24 @@ class PeerInnerTask:
 
     @message_queue_task
     async def get_channel_infos(self):
-        return self._peer_service.channel_infos
+        return self._peer_state.channel_infos
 
     @message_queue_task
     async def get_node_info_detail(self):
+        channels_info = self._peer_state.channel_infos
+
         return {
-            'peer_port': self._peer_service.peer_port,
-            'peer_target': self._peer_service.peer_target,
-            'rest_target': self._peer_service.rest_target,
-            'rs_target': self._peer_service.radio_station_target,
-            'peer_id': self._peer_service.peer_id,
-            'node_type': self._peer_service.node_type.value,
+            'peer_port': self._peer_state.peer_port,
+            'peer_target': self._peer_state.peer_target,
+            'rest_target': self._peer_state.rest_target,
+            'rs_target': self._peer_state.radio_station_target,
+            'peer_id': self._peer_state.peer_id,
+            'node_type': self._peer_state.node_type.value,
         }
 
     @message_queue_task
     async def get_node_key(self) -> bytes:
-        return self._peer_service.node_key
+        return self._peer_state.node_key
 
     @message_queue_task
     async def stop_outer(self):
@@ -74,7 +76,7 @@ class PeerInnerTask:
             # util.logger.spam(f"peer_inner_service:update_status "
             #                  f"{item}:{status[item]}")
             try:
-                self._peer_service.status_cache[channel][item] = status[item]
+                self._peer_state.status_cache[channel][item] = status[item]
             except KeyError:
                 logging.debug(f"peer_inner_service:not init channel({channel})")
 
@@ -88,7 +90,7 @@ class PeerInnerTask:
 
     @message_queue_task
     async def change_node_type(self, node_type):
-        await self._peer_service.change_node_type(node_type)
+        await self._peer_state.change_node_type(node_type)
 
 
 class PeerInnerService(MessageQueueService[PeerInnerTask]):

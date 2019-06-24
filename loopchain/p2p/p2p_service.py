@@ -18,6 +18,7 @@ from enum import IntEnum
 from typing import Dict
 
 from loopchain import configure as conf
+from loopchain.p2p.bridge import PeerBridgeBase
 from loopchain.p2p.grpc_helper import GRPCHelper
 from loopchain.p2p.protos import loopchain_pb2_grpc, loopchain_pb2
 from loopchain.p2p.server import P2PServer
@@ -45,11 +46,12 @@ class P2PService:
     """P2P network service is to control P2PServer and P2PClient
     """
 
-    def __init__(self, peer_port: int = None):
+    def __init__(self, peer_port: int = None, peer_bridge: PeerBridgeBase = None):
         """
         :param peer_port: peer port number
         """
         self._peer_port: int = peer_port
+        self._peer_bridge = peer_bridge
 
         # client for p2p networking (like stub_manager?)
         # TODO : change StubManager to P2PClient
@@ -102,7 +104,9 @@ class P2PService:
         """
         if not self._server:
             # TODO : distinguish server_class for grpc or zeromq
-            self._server = P2PServer(peer_port=self._peer_port, server_class=P2PServerClass)
+            self._server = P2PServer(peer_port=self._peer_port,
+                                     peer_bridge=self._peer_bridge,
+                                     server_class=P2PServerClass)
 
         self._server.start()
 

@@ -16,7 +16,7 @@
 import json
 import sys
 
-from loopchain.blockchain.transactions  import Transaction, TransactionVersioner, TransactionSerializer
+from loopchain.blockchain.transactions import Transaction, TransactionVersioner, TransactionSerializer
 from loopchain.p2p.grpc_helper.grpc_message import P2PMessage
 
 

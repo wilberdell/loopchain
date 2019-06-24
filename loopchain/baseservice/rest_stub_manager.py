@@ -13,30 +13,31 @@
 # limitations under the License.
 """A stub wrapper for REST call.
 This object has same interface with gRPC stub manager"""
+
+
 import logging
 from concurrent.futures import ThreadPoolExecutor
 
 import requests
 from jsonrpcclient import HTTPClient, Request
 
-import loopchain.utils as util
-from loopchain import configure as conf
+from loopchain import utils, configure as conf
 
 
 class RestStubManager:
     def __init__(self, target, channel=None, for_rs_target=True):
-        util.logger.spam(f"RestStubManager:init target({target})")
+        utils.logger.spam(f"RestStubManager:init target({target})")
         self._channel_name = channel or conf.LOOPCHAIN_DEFAULT_CHANNEL
         self._version_urls = {}
         self._http_clients = {}
         for version in conf.ApiVersion:
             if 'https://' in target:
-                url = util.normalize_request_url(target, version, self._channel_name)
+                url = utils.normalize_request_url(target, version, self._channel_name)
             elif for_rs_target:
-                url = util.normalize_request_url(
+                url = utils.normalize_request_url(
                     f"{'https' if conf.SUBSCRIBE_USE_HTTPS else 'http'}://{target}", version, self._channel_name)
             else:
-                url = util.normalize_request_url(f"http://{target}", version, self._channel_name)
+                url = utils.normalize_request_url(f"http://{target}", version, self._channel_name)
             self._version_urls[version] = url
             if version != conf.ApiVersion.v1:
                 self._http_clients[url] = HTTPClient(url)
@@ -82,7 +83,7 @@ class RestStubManager:
                     response = self._http_clients[url].send(request, timeout=conf.REST_ADDITIONAL_TIMEOUT)
                 except Exception as e:
                     raise ConnectionError(e)
-            util.logger.spam(f"REST call complete request_url({url}), method_name({method_name})")
+            utils.logger.spam(f"REST call complete request_url({url}), method_name({method_name})")
             return response
 
         except Exception as e:

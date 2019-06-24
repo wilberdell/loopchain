@@ -231,6 +231,7 @@ class ChannelTxReceiverInnerTask:
 
     @message_queue_task(type_=MessageQueueType.Worker)
     def add_tx_list(self, request) -> tuple:
+        # FIXME : review replace request to request.tx_list
         if self.__nid is None:
             response_code = message_code.Response.fail
             message = "Node initialization is not completed."
@@ -645,6 +646,7 @@ class ChannelInnerTask:
 
     @message_queue_task(type_=MessageQueueType.Worker)
     def add_tx(self, request) -> None:
+        # FIXME : review replace request to request.tx_json
         tx_json = request.tx_json
 
         tx_versioner = self._channel_service.block_manager.get_blockchain().tx_versioner

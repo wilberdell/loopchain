@@ -68,7 +68,7 @@ check:
 
 # Run unittest
 test:
-	@python3 -m unittest discover testcase/unittest/ -p "test_*.py" || exit -1
+	python3 -m pytest -v testcase/unittest
 
 # Clean all - clean-process clean-mq clean-pyc clean-db clean-log
 clean: clean-process clean-mq clean-pyc clean-db clean-log check
