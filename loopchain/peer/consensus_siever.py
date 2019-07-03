@@ -92,7 +92,14 @@ class ConsensusSiever(ConsensusBase):
 
     async def __add_block(self, block: Block):
         vote = self._block_manager.candidate_blocks.get_votes(block.header.hash)
-        vote_result = await self._wait_for_voting(block)
+        last_block = self._blockchain.last_unconfirmed_block or self._blockchain.last_block
+        last_block_votes = self._block_manager.candidate_blocks.get_votes(last_block.header.hash)
+        util.logger.warning(f"last_block_votes :  {last_block}")
+        if last_block_votes.block_height < block.header.height:
+            vote_result = None
+        else:
+            vote_result = await self._wait_for_voting(block)
+
         if not vote_result:
             raise NotEnoughVotes
 
@@ -144,6 +151,7 @@ class ConsensusSiever(ConsensusBase):
 
             last_block = self._blockchain.last_unconfirmed_block or self._blockchain.last_block
             last_block_votes = self.get_votes(last_block.header.hash)
+            util.logger.warning(f"last_block_votes: {last_block.header.height}//////////{last_block_votes}")
 
             block_builder = self._block_manager.epoch.makeup_block(complain_votes, last_block_votes)
             vote_result = None
@@ -176,7 +184,12 @@ class ConsensusSiever(ConsensusBase):
                         return
                 elif len(block_builder.transactions) > 0 or conf.ALLOW_MAKE_EMPTY_BLOCK:
                     if last_unconfirmed_block:
+                        # if last_block_votes
                         next_leader = await self.__add_block_and_new_epoch(block_builder, last_unconfirmed_block)
+                        if next_leader is None:
+                            broadcast_func = partial(self._block_manager.broadcast_send_unconfirmed_block, last_unconfirmed_block)
+                            self.__start_broadcast_send_unconfirmed_block_timer(broadcast_func)
+                            return
                 elif len(block_builder.transactions) == 0 and (
                         last_unconfirmed_block and len(last_unconfirmed_block.body.transactions) > 0):
                     next_leader = await self.__add_block_and_new_epoch(block_builder, last_unconfirmed_block)
@@ -210,7 +223,6 @@ class ConsensusSiever(ConsensusBase):
                                  f"next_leader({next_leader.hex_hx()}) "
                                  f"peer_id({ChannelProperty().peer_id})")
                 ObjectManager().channel_service.reset_leader(next_leader.hex_hx())
-                ObjectManager().channel_service.turn_on_leader_complain_timer()
             else:
                 if self.made_block_count >= conf.MAX_MADE_BLOCK_COUNT:
                     ObjectManager().channel_service.reset_leader(next_leader.hex_hx())
@@ -231,10 +243,14 @@ class ConsensusSiever(ConsensusBase):
         while True:
             votes = self._block_manager.candidate_blocks.get_votes(candidate_block.header.hash)
             util.logger.info(f"Votes : {votes.get_summary()}")
+            # last_block = self._blockchain.last_unconfirmed_block or self._blockchain.last_block
+            # last_block_votes = self._block_manager.candidate_blocks.get_votes(last_block.header.hash)
+            # util.logger.warning(f"last_block_votes :  {last_block}")
             vote_result = votes.get_result()
             if vote_result is not None or votes.is_completed():
                 self.__stop_broadcast_send_unconfirmed_block_timer()
                 return vote_result
+
             await asyncio.sleep(conf.WAIT_SECONDS_FOR_VOTE)
 
             timeout_timestamp = candidate_block.header.timestamp + conf.BLOCK_VOTE_TIMEOUT * 1_000_000
