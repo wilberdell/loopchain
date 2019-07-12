@@ -17,12 +17,11 @@
 import argparse
 import json
 import logging
-import os
 import time
 from urllib.parse import urlparse, ParseResult
 
-from loopchain import utils
 from loopchain import configure as conf
+from loopchain import utils
 from loopchain.channel.channel_service import ChannelService
 from loopchain.peer import PeerService
 from loopchain.radiostation import RadioStationService
@@ -83,7 +82,7 @@ def main(argv):
         start_as_admin(args)
     else:
         print(f"not supported service type {args.service_type}\ncheck loopchain help.\n")
-        os.system("python3 ./loopchain.py -h")
+        parser.print_help()
 
 
 def check_port_available(port):
