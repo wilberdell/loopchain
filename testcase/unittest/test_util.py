@@ -35,7 +35,7 @@ from loopchain.blockchain.transactions import Transaction, TransactionBuilder, T
 from loopchain.blockchain.types import Address
 from loopchain.components import SingletonMetaClass
 from loopchain.peer import Signer
-from loopchain.protos import loopchain_pb2, loopchain_pb2_grpc
+from loopchain.p2p.protos import loopchain_pb2, loopchain_pb2_grpc
 from loopchain.radiostation import RadioStationService
 from loopchain.utils import loggers
 from loopchain.utils.message_queue import StubCollection
@@ -120,33 +120,6 @@ def run_radio_station_as_process_and_stub(port, timeout=None):
                                             stub_class=loopchain_pb2_grpc.RadioStationStub,
                                             time_out_seconds=timeout)
     return process, stub
-
-
-def run_score_server_as_process(amqp_key):
-    args = ['python3', 'loopchain.py', 'score',
-            '--channel', conf.LOOPCHAIN_DEFAULT_CHANNEL,
-            '--amqp_key', amqp_key,
-            '--score_package', "score_package",
-            '-d']
-    logging.debug(f"run_score_server_as_process ({args})")
-    return CommonSubprocess(args)
-
-
-async def run_score_server_as_process_and_stub_async():
-    amqp_key = str(time.time())
-    process = run_score_server_as_process(amqp_key)
-
-    StubCollection().amqp_target = conf.AMQP_TARGET
-    StubCollection().amqp_key = amqp_key
-
-    logging.debug(f'{StubCollection().amqp_key} score hello')
-
-    await StubCollection().create_score_stub(conf.LOOPCHAIN_DEFAULT_CHANNEL, 'score_package')
-    await StubCollection().score_stubs[conf.LOOPCHAIN_DEFAULT_CHANNEL].async_task().hello()
-
-    logging.debug(f'{StubCollection().amqp_key} score hello complete')
-
-    return process, StubCollection().score_stubs[conf.LOOPCHAIN_DEFAULT_CHANNEL]
 
 
 def print_testname(testname):

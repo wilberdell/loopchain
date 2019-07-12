@@ -523,13 +523,16 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
             response_code=response_code, response_message=response_message, block=block)
 
     def Query(self, request, context):
-        """Score 의 invoke 로 생성된 data 에 대한 query 를 수행한다."""
-        channel_name = conf.LOOPCHAIN_DEFAULT_CHANNEL if request.channel == '' else request.channel
+        """
+        FIXME : not use?
+        deprecated
+        """
+        # channel_name = conf.LOOPCHAIN_DEFAULT_CHANNEL if request.channel == '' else request.channel
 
-        score_stub = StubCollection().score_stubs[channel_name]
-        response_code, response = score_stub.sync_task().query(request.params)
+        # score_stub = StubCollection().score_stubs[channel_name]
+        # response_code, response = score_stub.sync_task().query(request.params)
 
-        return loopchain_pb2.QueryReply(response_code=response_code, response=response)
+        return loopchain_pb2.QueryReply(response_code=message_code.Response.fail, response="{}")
 
     def GetInvokeResult(self, request, context):
         """get invoke result by tx_hash

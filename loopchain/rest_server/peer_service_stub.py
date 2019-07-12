@@ -19,7 +19,7 @@ from json import JSONDecodeError
 from loopchain import configure as conf
 from loopchain.baseservice import StubManager
 from loopchain.components import SingletonMetaClass
-from loopchain.protos import loopchain_pb2, loopchain_pb2_grpc
+from loopchain.p2p.protos import loopchain_pb2, loopchain_pb2_grpc
 
 
 class PeerServiceStub(metaclass=SingletonMetaClass):

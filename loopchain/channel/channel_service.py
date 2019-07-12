@@ -13,7 +13,6 @@
 # limitations under the License.
 
 import asyncio
-import json
 import leveldb
 import logging
 import signal
@@ -361,6 +360,7 @@ class ChannelService:
     def __init_radio_station_stub(self):
         if self.is_support_node_function(conf.NodeFunction.Vote):
             if conf.ENABLE_REP_RADIO_STATION:
+                # FIXME : move to p2p_service
                 self.__radio_station_stub = StubManager.get_stub_manager_to_server(
                     ChannelProperty().radio_station_target,
                     loopchain_pb2_grpc.RadioStationStub,
@@ -803,12 +803,6 @@ class ChannelService:
         stub.sync_task().write_precommit_state(request)
 
         self.__block_manager.pop_old_block_hashes(block.header.height)
-        return True
-
-    def score_remove_precommit_state(self, block: Block):
-        invoke_fail_info = json.dumps({"block_height": block.height, "block_hash": block.block_hash})
-        stub = StubCollection().score_stubs[ChannelProperty().name]
-        stub.sync_task().remove_precommit_state(invoke_fail_info)
         return True
 
     def turn_on_leader_complain_timer(self):
