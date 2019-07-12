@@ -22,6 +22,8 @@ class ChannelManager:
     """어떤 Peer가 loopchain network 에 접속할 권한을 가지고 있는지 어떤 채널에 속할 권한을 가지고 있는지 관리한다.
     이 데이터는 RS Admin site 를 통해서 설정될 수 있으며, 이중화 또는 3중화된 복수의 RS가 존재할 경우 이 데이터를 동기되어야한다.
     key 생성을 위한 난수표는 메모리상에만 존재해야 하며 나머지 데이터는 level DB 를 사용한다.
+
+    FIXME : use by radiostation only
     """
 
     def __init__(self):

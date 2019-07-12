@@ -14,13 +14,13 @@
 """PeerInfo for shared peer info and PeerLiveData for instance data can't serialized"""
 
 import datetime
-import logging
 import json
+import logging
 from enum import IntEnum
 
 from loopchain import configure as conf
-from loopchain.baseservice import StubManager
-from loopchain.protos import loopchain_pb2_grpc
+from loopchain.p2p.p2p_service import P2PService
+from loopchain.p2p.stub_manager import StubManager
 
 
 class PeerStatus(IntEnum):
@@ -46,13 +46,13 @@ class PeerInfo:
         :param order:
         :return:
         """
-        self.__peer_id = peer_id
-        self.__group_id = group_id
+        self.__peer_id: str = peer_id
+        self.__group_id: str = group_id
         self.__order: int = order
         self.__target: str = target
 
         self.__status_update_time = datetime.datetime.now()
-        self.__status = status
+        self.__status: PeerStatus = status
 
     @property
     def peer_id(self) -> str:
@@ -63,7 +63,7 @@ class PeerInfo:
         return self.__group_id
 
     @property
-    def order(self):
+    def order(self) -> int:
         return self.__order
 
     @order.setter
@@ -71,19 +71,19 @@ class PeerInfo:
         self.__order = order
 
     @property
-    def target(self):
+    def target(self) -> str:
         return self.__target
 
     @target.setter
-    def target(self, target):
+    def target(self, target: str):
         self.__target = target
 
     @property
-    def status(self):
+    def status(self) -> PeerStatus:
         return self.__status
 
     @status.setter
-    def status(self, status):
+    def status(self, status: PeerStatus):
         if self.__status != status:
             self.__status_update_time = datetime.datetime.now()
             self.__status = status
@@ -125,7 +125,7 @@ class PeerInfo:
 class PeerObject:
     """Peer object has PeerInfo and live data"""
 
-    def __init__(self, channel: str, peer_info: PeerInfo):
+    def __init__(self, channel: str, peer_info: PeerInfo, p2p_service: P2PService = None):
         """set peer info and create live data
 
         :param channel: peer channel name
@@ -137,13 +137,14 @@ class PeerObject:
         self.__no_response_count = 0
         self.__channel = channel
 
-        self.__create_live_data()
+        self.__create_live_data(p2p_service)
 
-    def __create_live_data(self):
+    def __create_live_data(self, p2p_service):
         try:
-            self.__stub_manager = StubManager(self.__peer_info.target,
-                                              loopchain_pb2_grpc.PeerServiceStub,
-                                              conf.GRPC_SSL_TYPE)
+            target = self.__peer_info.target
+            p2p_service.add_client(target)
+            # FIXME : peer object need stub_manager??
+            self.__stub_manager = p2p_service.get_client(target)
         except Exception as e:
             logging.exception(f"Create Peer create stub_manager fail target : {self.__peer_info.target} \n"
                               f"exception : {e}")

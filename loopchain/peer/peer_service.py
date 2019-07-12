@@ -16,35 +16,32 @@ It has secure outer service for p2p consensus and status monitoring.
 And also has insecure inner service for inner process modules."""
 
 import getpass
+import json
 import multiprocessing
 import signal
 import timeit
-import json
 from functools import partial
 
-import grpc
-
-from loopchain.baseservice import CommonSubprocess
-from loopchain.baseservice import StubManager, RestStubManager
+from loopchain.baseservice import CommonSubprocess, RestStubManager
+# FIXME : import directly
 from loopchain.blockchain import *
 from loopchain.container import RestService
 from loopchain.crypto.signature import Signer
-from loopchain.peer import PeerInnerService, PeerOuterService
-from loopchain.protos import loopchain_pb2, loopchain_pb2_grpc
-from loopchain.tools.grpc_helper import GRPCHelper
+from loopchain.p2p.p2p_service import P2PService, get_radio_station_stub
+from loopchain.peer import PeerInnerService
 from loopchain.utils import loggers, command_arguments
 from loopchain.utils.message_queue import StubCollection
 
 
 class PeerService:
-    """Main class of peer service having outer & inner gRPC interface
-
+    """Peer Service
+    p2p networking with P2PService(outer) and inter process communication with rabbitMQ(inner)
     """
     def __init__(self, radio_station_target=None, node_type=None):
         """Peer는 Radio Station 에 접속하여 leader 및 다른 Peer에 대한 접속 정보를 전달 받는다.
 
         :param radio_station_target: IP:Port of Radio Station
-        :param node_type: node type
+        :param node_type: CommunityNode or CitizenNode
         :return:
         """
         node_type = node_type or conf.NodeType.CommunityNode
@@ -63,7 +60,7 @@ class PeerService:
         self._radio_station_stub = None
         self._peer_id = None
         self._node_key = bytes()
-        self.p2p_outer_server: grpc.Server = None
+        self.p2p_service: P2PService = None
         self._channel_infos = None
 
         # peer status cache for channel
@@ -75,7 +72,6 @@ class PeerService:
 
         # gRPC service for Peer
         self._inner_service: PeerInnerService = None
-        self._outer_service: PeerOuterService = None
 
         self._channel_services = {}
         self._rest_service = None
@@ -85,10 +81,6 @@ class PeerService:
     @property
     def inner_service(self):
         return self._inner_service
-
-    @property
-    def outer_service(self):
-        return self._outer_service
 
     @property
     def peer_target(self):
@@ -114,14 +106,7 @@ class PeerService:
     def stub_to_radiostation(self):
         if self._radio_station_stub is None:
             if self.is_support_node_function(conf.NodeFunction.Vote):
-                if conf.ENABLE_REP_RADIO_STATION:
-                    self._radio_station_stub = StubManager.get_stub_manager_to_server(
-                        self._radio_station_target,
-                        loopchain_pb2_grpc.RadioStationStub,
-                        conf.CONNECTION_RETRY_TIMEOUT_TO_RS,
-                        ssl_auth_type=conf.GRPC_SSL_TYPE)
-                else:
-                    self._radio_station_stub = None
+                self._radio_station_stub = get_radio_station_stub(self._radio_station_target)
             else:
                 self._radio_station_stub = RestStubManager(self._radio_station_target)
 
@@ -139,22 +124,14 @@ class PeerService:
     def node_key(self):
         return self._node_key
 
-    def p2p_server_stop(self):
-        self.p2p_outer_server.stop(None)
-
     def _get_channel_infos(self):
         # util.logger.spam(f"__get_channel_infos:node_type::{self.__node_type}")
         if self.is_support_node_function(conf.NodeFunction.Vote):
             if conf.ENABLE_REP_RADIO_STATION:
-                response = self.stub_to_radiostation.call_in_times(
-                    method_name="GetChannelInfos",
-                    message=loopchain_pb2.GetChannelInfosRequest(
-                        peer_id=self._peer_id,
-                        peer_target=self._peer_target,
-                        group_id=self._peer_id),
-                    retry_times=conf.CONNECTION_RETRY_TIMES_TO_RS,
-                    is_stub_reuse=False,
-                    timeout=conf.CONNECTION_TIMEOUT_TO_RS
+                response = self.p2p_service.call_and_retry(
+                    self.stub_to_radiostation,
+                    self._peer_id,
+                    self._peer_target
                 )
                 # util.logger.spam(f"__get_channel_infos:response::{response}")
 
@@ -226,9 +203,11 @@ class PeerService:
             from loopchain.tools.kms_helper import KmsHelper
             KmsHelper().remove_agent_pin()
 
-    def run_p2p_server(self):
-        self.p2p_outer_server = GRPCHelper().start_outer_server(str(self._peer_port))
-        loopchain_pb2_grpc.add_PeerServiceServicer_to_server(self._outer_service, self.p2p_outer_server)
+    def start_p2p_server(self):
+        self.p2p_service.start_server()
+
+    def stop_p2p_server(self):
+        self.p2p_service.stop_server()
 
     def serve(self,
               port,
@@ -258,14 +237,15 @@ class PeerService:
         StubCollection().amqp_key = amqp_key
 
         peer_queue_name = conf.PEER_QUEUE_NAME_FORMAT.format(amqp_key=amqp_key)
-        self._outer_service = PeerOuterService()
         self._inner_service = PeerInnerService(
             amqp_target, peer_queue_name, conf.AMQP_USERNAME, conf.AMQP_PASSWORD, peer_service=self)
 
         self._reset_channel_infos()
 
         self._run_rest_services(port)
-        self.run_p2p_server()
+
+        self.p2p_service = P2PService(self.__peer_port)
+        self.start_p2p_server()
 
         self._close_kms_helper()
 
@@ -307,7 +287,7 @@ class PeerService:
             for channel_stub in StubCollection().channel_stubs.values():
                 await channel_stub.async_task().stop("Close")
 
-            self.p2p_server_stop()
+            self.stop_p2p_server()
             loop.stop()
 
         loop = self._inner_service.loop

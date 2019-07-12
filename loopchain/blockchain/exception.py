@@ -13,7 +13,7 @@
 # limitations under the License.
 """A module of exceptions for errors on block chain"""
 
-from loopchain.protos import message_code
+from loopchain.p2p import message_code
 
 
 class BlockInValidError(Exception):

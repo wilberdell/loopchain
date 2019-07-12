@@ -67,7 +67,7 @@ fabric.properties
 grpc
 worknote
 loopchain/peer/radiopeer_pb2.py
-loopchain/protos/loopchain_pb2*.py
+loopchain/p2p/protos/loopchain_pb2*.py
 
 ### level db and sqlite dirs ###
 db

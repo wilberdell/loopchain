@@ -35,7 +35,7 @@ from loopchain.blockchain.transactions import (Transaction, TransactionSerialize
 from loopchain.blockchain.types import Hash32
 from loopchain.blockchain.votes.v0_1a import BlockVote, LeaderVote
 from loopchain.channel.channel_property import ChannelProperty
-from loopchain.protos import loopchain_pb2, message_code
+from loopchain.p2p import message_code
 from loopchain.qos.qos_controller import QosController, QosCountControl
 from loopchain.rest_server.json_rpc import JsonError
 from loopchain.utils.message_queue import StubCollection
@@ -602,6 +602,13 @@ class ChannelInnerTask:
 
     @message_queue_task
     def create_tx(self, data):
+        """
+        FIXME : deprecated
+
+        :param data:
+        :return:
+        """
+
         tx = Transaction()
         score_id = ""
         score_version = ""
@@ -755,8 +762,8 @@ class ChannelInnerTask:
         if block.header.height <= blockchain.block_height:
             confirm_info = blockchain.find_confirm_info_by_hash(block.header.hash)
 
-        return message_code.Response.success, block.header.height, blockchain.block_height, unconfirmed_block_height,\
-            confirm_info, blockchain.block_dumps(block)
+        return (message_code.Response.success, block.header.height, blockchain.block_height,
+                unconfirmed_block_height, confirm_info, blockchain.block_dumps(block))
 
     @message_queue_task(type_=MessageQueueType.Worker)
     def add_audience(self, peer_target) -> None:
@@ -963,7 +970,13 @@ class ChannelInnerTask:
 
     @message_queue_task
     def get_score_status(self):
+        """
+        FIXME : deprecated? channel service has not score_stub
+        :return:
+        """
+
         score_status = ""
+        """
         try:
             score_status_response = self._channel_service.score_stub.call(
                 "Request",
@@ -978,6 +991,7 @@ class ChannelInnerTask:
         else:
             if score_status_response.code == message_code.Response.success:
                 score_status = score_status_response.meta
+        """
 
         return score_status
 

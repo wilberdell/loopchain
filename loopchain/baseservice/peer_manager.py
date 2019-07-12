@@ -20,12 +20,12 @@ import math
 import threading
 from typing import Union
 
-import loopchain_pb2
-
-import loopchain.utils as util
-from loopchain import configure as conf
-from loopchain.baseservice import BroadcastCommand, ObjectManager, StubManager, PeerStatus, PeerObject, PeerInfo
-from loopchain.protos import message_code
+from loopchain import configure as conf, utils
+from loopchain.baseservice import BroadcastCommand, ObjectManager, PeerStatus, PeerObject, PeerInfo
+from loopchain.p2p import message_code
+from loopchain.p2p.grpc_helper.grpc_message import P2PMessage
+from loopchain.p2p.p2p_service import P2PService, PeerType
+from loopchain.p2p.stub_manager import StubManager
 
 
 class PeerListData:
@@ -84,6 +84,8 @@ class PeerManager:
         self.__leader_complain_count = 0
         self.__highest_block_height = -1    # for RS heartbeat
 
+        self._p2p_service = P2PService()
+
     def peer_ids_hash(self):
         """ It's temporary develop for Prep test net. This value will replace with Prep root hash.
 
@@ -99,7 +101,7 @@ class PeerManager:
             peer_id = self.peer_order_list[peer_order]
             peer_each = self.peer_list[peer_id]
 
-            util.logger.debug(f"peer_order({peer_order}), peer_id({peer_id}), peer_target({peer_each.target})")
+            utils.logger.debug(f"peer_order({peer_order}), peer_id({peer_id}), peer_target({peer_each.target})")
             peer_ids += peer_id
 
         return self.get_peer_ids_hash(peer_ids)
@@ -107,7 +109,7 @@ class PeerManager:
     @staticmethod
     def get_peer_ids_hash(peer_ids):
         peer_ids_hash = hashlib.sha256(peer_ids.encode(encoding='UTF-8')).hexdigest()
-        util.logger.debug(f"peer ids hash({peer_ids_hash})")
+        utils.logger.debug(f"peer ids hash({peer_ids_hash})")
         return peer_ids_hash
 
     @property
@@ -148,7 +150,7 @@ class PeerManager:
             peer_info = PeerInfo(peer_info["id"], peer_info["id"], peer_info["peer_target"], order=peer_info["order"])
 
         logging.debug(f"add peer id: {peer_info.peer_id}")
-        peer_object = PeerObject(self.__channel_name, peer_info)
+        peer_object = PeerObject(self.__channel_name, peer_info, self._p2p_service)
 
         # add_peer logic must be atomic
         with self.__add_peer_lock:
@@ -201,6 +203,8 @@ class PeerManager:
     def get_leader_peer(self, is_complain_to_rs=False, is_peer=True) -> PeerInfo:
         """
 
+        :param is_complain_to_rs:
+        :param is_peer:
         :return:
         """
 
@@ -213,7 +217,7 @@ class PeerManager:
             logging.exception(f"peer_manager:get_leader_peer exception({e})")
 
             if is_peer and ObjectManager().channel_service.is_support_node_function(conf.NodeFunction.Vote):
-                util.exit_and_msg(f"Fail to find a leader of this network.... {e}")
+                utils.exit_and_msg(f"Fail to find a leader of this network.... {e}")
 
         return None
 
@@ -231,7 +235,7 @@ class PeerManager:
         try:
             return self.peer_order_list[leader_peer_order]
         except KeyError:
-            util.logger.spam(
+            utils.logger.spam(
                 f"get_leader_id KeyError leader_peer_order({leader_peer_order})")
 
         return None
@@ -250,7 +254,7 @@ class PeerManager:
             raise e
 
     def get_next_leader_peer(self, current_leader_peer_id=None, is_only_alive=False):
-        util.logger.spam(f"peer_manager:get_next_leader_peer current_leader_peer_id({current_leader_peer_id})")
+        utils.logger.spam(f"peer_manager:get_next_leader_peer current_leader_peer_id({current_leader_peer_id})")
 
         if not current_leader_peer_id:
             leader_peer = self.get_leader_peer(is_complain_to_rs=True)
@@ -273,7 +277,7 @@ class PeerManager:
         next_order_position = peer_order_position + 1
         peer_count = len(order_list)
 
-        util.logger.spam(f"peer_manager:__get_next_peer peer_count({peer_count})")
+        utils.logger.spam(f"peer_manager:__get_next_peer peer_count({peer_count})")
 
         for i in range(peer_count):
             # Prevent out of range
@@ -296,7 +300,7 @@ class PeerManager:
                 stub_manager = self.get_peer_stub_manager(leader_peer)
 
                 response = stub_manager.call_in_times(
-                    "Request", loopchain_pb2.Message(
+                    "Request", P2PMessage.get_message(
                         code=message_code.Request.status,
                         channel=self.__channel_name
                     ), is_stub_reuse=True)
@@ -306,22 +310,22 @@ class PeerManager:
                     break  # LABEL 1
 
             next_order_position += 1
-            util.logger.spam(f"peer_manager:__get_next_peer next_order_position({next_order_position})")
+            utils.logger.spam(f"peer_manager:__get_next_peer next_order_position({next_order_position})")
 
         if next_order_position >= peer_count:
-            util.logger.spam(f"peer_manager:__get_next_peer Fail break at LABEL 1")
+            utils.logger.spam(f"peer_manager:__get_next_peer Fail break at LABEL 1")
             next_order_position = 0
 
         try:
             next_peer_id = self.peer_order_list[order_list[next_order_position]]
-            util.logger.debug("peer_manager:__get_next_peer next_leader_peer_id: " + str(next_peer_id))
+            utils.logger.debug("peer_manager:__get_next_peer next_leader_peer_id: " + str(next_peer_id))
             return self.peer_list[next_peer_id]
         except (IndexError, KeyError) as e:
             logging.warning(f"peer_manager:__get_next_peer there is no next peer ({e})")
-            util.logger.spam(f"peer_manager:__get_next_peer "
-                             f"\npeer_id({peer.peer_id}), "
-                             f"\npeer_object_list({self.peer_object_list}), "
-                             f"\npeer_list({self.peer_list})")
+            utils.logger.spam(f"peer_manager:__get_next_peer "
+                              f"\npeer_id({peer.peer_id}), "
+                              f"\npeer_object_list({self.peer_object_list}), "
+                              f"\npeer_list({self.peer_list})")
             return None
 
     def get_peer_stub_manager(self, peer) -> StubManager:
@@ -345,22 +349,25 @@ class PeerManager:
                 logging.warning("gRPC Exception: " + str(e))
                 logging.debug("No response target: " + str(peer_each.target))
 
-    def complain_leader(self, is_announce=False) -> PeerInfo:
+    def complain_leader(self, is_announce: bool = False) -> PeerInfo:
         """When current leader is offline, Find last height alive peer and set as a new leader.
 
-        :param is_announce:
-        :return:
+        :param is_announce: boolean
+        :return: peer_info
         """
 
         leader_peer = self.get_leader_peer(is_peer=False)
         try:
             stub_manager = self.get_peer_stub_manager(leader_peer)
-            response = stub_manager.call("GetStatus", loopchain_pb2.StatusRequest(request=""), is_stub_reuse=True)
+
+            response = stub_manager.call("GetStatus",
+                                         P2PMessage.status_request(request=""),
+                                         is_stub_reuse=True)
 
             status_json = json.loads(response.status)
             logging.warning(f"stub_manager target({stub_manager.target}) type({status_json['peer_type']})")
 
-            if status_json["peer_type"] == str(loopchain_pb2.BLOCK_GENERATOR):
+            if status_json["peer_type"] == str(PeerType.BLOCK_GENERATOR):
                 return leader_peer
             else:
                 raise Exception
@@ -381,7 +388,7 @@ class PeerManager:
             stub_manager = peer_each.stub_manager
             try:
                 response = stub_manager.call("GetStatus",
-                                             loopchain_pb2.StatusRequest(request="find highest peer"),
+                                             P2PMessage.status_request(request="find highest peer"),
                                              is_stub_reuse=True)
 
                 peer_status = json.loads(response.status)
@@ -404,7 +411,7 @@ class PeerManager:
 
             try:
                 response = stub_manager.call(
-                    "Request", loopchain_pb2.Message(
+                    "Request", P2PMessage.get_message(
                         code=message_code.Request.status,
                         channel=self.__channel_name,
                         message="check peer status by rs",
@@ -423,7 +430,7 @@ class PeerManager:
                 if peer_status["block_height"] >= self.__highest_block_height:
                     self.__highest_block_height = peer_status["block_height"]
             except Exception as e:
-                util.apm_event(conf.RADIO_STATION_NAME, {
+                utils.apm_event(conf.RADIO_STATION_NAME, {
                     'event_type': 'DisconnectedPeer',
                     'peer_name': conf.PEER_NAME,
                     'channel_name': self.__channel_name,
@@ -435,7 +442,7 @@ class PeerManager:
                                 ") gRPC Exception: " + str(e))
                 peer_object.no_response_count_up()
 
-                util.logger.spam(
+                utils.logger.spam(
                     f"peer_manager::check_peer_status "
                     f"peer_id({peer_object.peer_info.peer_id}) "
                     f"no response count up({peer_object.no_response_count})")
@@ -461,7 +468,8 @@ class PeerManager:
             if check_status:
                 try:
                     stub_manager = self.get_peer_stub_manager(peer_each)
-                    stub_manager.call("GetStatus", loopchain_pb2.StatusRequest(request="reset peers in group"),
+                    stub_manager.call("GetStatus",
+                                      P2PMessage.status_request(request="reset peers in group"),
                                       is_stub_reuse=True)
                 except Exception as e:
                     logging.warning(f"gRPC Exception({str(e)}) remove this peer({str(peer_each.target)})")
@@ -495,7 +503,7 @@ class PeerManager:
 
         return last_order
 
-    def get_peer(self, peer_id) -> PeerInfo:
+    def get_peer(self, peer_id) -> Union[PeerInfo, None]:
         """peer_id 에 해당하는 peer 를 찾는다.
 
         :param peer_id:
@@ -533,7 +541,7 @@ class PeerManager:
         logging.debug(f"remove peer : {peer_id}")
         removed_peer = self.__remove_peer_from_group(peer_id)
         if removed_peer:
-            util.logger.spam(f"peer_manager:remove_peer try remove audience in sub processes")
+            utils.logger.spam(f"peer_manager:remove_peer try remove audience in sub processes")
             if ObjectManager().rs_service:
                 ObjectManager().rs_service.channel_manager.remove_audience(self.__channel_name, removed_peer)
             else:

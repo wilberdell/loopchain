@@ -36,8 +36,9 @@ from pathlib import Path
 from subprocess import PIPE, Popen, TimeoutExpired
 
 from loopchain import configure as conf
-from loopchain.protos import loopchain_pb2, message_code
-from loopchain.tools.grpc_helper import GRPCHelper
+from loopchain.p2p.protos import loopchain_pb2
+from loopchain.p2p import message_code
+from loopchain.p2p.grpc_helper import GRPCHelper
 
 apm_event = None
 
@@ -126,6 +127,7 @@ def load_user_score(path):
     return _load_user_score_module(path, "UserScore")
 
 
+# FIXME : not use?
 def get_stub_to_server(target, stub_class, time_out_seconds=None, is_check_status=True,
                        ssl_auth_type: conf.SSLAuthType=conf.SSLAuthType.none):
     """gRPC connection to server

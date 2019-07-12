@@ -24,7 +24,8 @@ from loopchain import configure as conf
 from loopchain.baseservice import (PeerStatus, PeerInfo, PeerListData, PeerManager,
                                    ObjectManager, TimerService, Timer)
 from loopchain.configure_default import KeyLoadType
-from loopchain.protos import loopchain_pb2_grpc, message_code
+from loopchain.p2p.protos import loopchain_pb2_grpc
+from loopchain.p2p import message_code
 
 
 class OuterService(loopchain_pb2_grpc.RadioStationServicer):

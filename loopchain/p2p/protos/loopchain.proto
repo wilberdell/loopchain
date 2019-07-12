@@ -24,6 +24,7 @@ syntax = "proto2";
 // ########################################################################
 
 // Peer Inner Service
+// deprecated
 service InnerService {
     rpc Request (Message) returns (Message) {}
     rpc GetStatus (StatusRequest) returns (StatusReply) {}

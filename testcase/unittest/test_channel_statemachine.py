@@ -19,15 +19,15 @@ import unittest
 import loopchain.utils as util
 import testcase.unittest.test_util as test_util
 from loopchain.channel.channel_statemachine import ChannelStateMachine
-from loopchain.protos import loopchain_pb2
+from loopchain.p2p.p2p_service import PeerType
 
 
 class MockBlockManager:
-    peer_type = loopchain_pb2.BLOCK_GENERATOR
+    peer_type = PeerType.BLOCK_GENERATOR
 
     def __init__(self):
         self.timer_called = 0
-        self.peer_type = loopchain_pb2.BLOCK_GENERATOR
+        self.peer_type = PeerType.BLOCK_GENERATOR
 
     def start_block_generate_timer(self):
         if self.timer_called == 0:
@@ -50,7 +50,7 @@ class MockBlockManager:
 
 
 class MockBlockManagerCitizen:
-    peer_type = loopchain_pb2.PEER
+    peer_type = PeerType.PEER
 
     def start_block_generate_timer(self):
         pass

@@ -16,8 +16,8 @@
 import json
 import sys
 
-from loopchain.blockchain.transactions import Transaction, TransactionVersioner, TransactionSerializer
-from loopchain.protos import loopchain_pb2
+from loopchain.blockchain.transactions  import Transaction, TransactionVersioner, TransactionSerializer
+from loopchain.p2p.grpc_helper.grpc_message import P2PMessage
 
 
 class TxItem:
@@ -32,7 +32,10 @@ class TxItem:
         return self.__len
 
     def get_tx_message(self):
-        message = loopchain_pb2.TxSend(
+        """
+        :return: message for send transaction
+        """
+        message = P2PMessage.tx_send(
             tx_json=self.__tx_json,
             channel=self.channel)
         return message

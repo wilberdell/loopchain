@@ -18,28 +18,30 @@ import logging
 import shutil
 import threading
 import traceback
-from concurrent.futures import ThreadPoolExecutor, Future
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor, Future
 from typing import TYPE_CHECKING, Dict, DefaultDict
 
 import loopchain.utils as util
 from loopchain import configure as conf
-from loopchain.baseservice import TimerService, ObjectManager, Timer
+from loopchain.baseservice import TimerService, Timer
 from loopchain.baseservice.aging_cache import AgingCache
-from loopchain.blockchain import BlockChain, CandidateBlocks, Epoch, \
-    TransactionInvalidDuplicatedHash, TransactionInvalidOutOfTimeBound, BlockchainError, NID, exception
-from loopchain.blockchain.types import TransactionStatusInQueue, Hash32
+from loopchain.blockchain import (BlockChain, CandidateBlocks, Epoch,
+                                  TransactionInvalidDuplicatedHash, TransactionInvalidOutOfTimeBound,
+                                  BlockchainError, NID, exception)
 from loopchain.blockchain.blocks import Block, BlockVerifier, BlockSerializer
+from loopchain.blockchain.exception import (InvalidUnconfirmedBlock, DuplicationUnconfirmedBlock,
+                                            ScoreInvokeError, ConfirmInfoInvalid, ConfirmInfoInvalidAddedBlock,
+                                            ConfirmInfoInvalidNeedBlockSync)
 from loopchain.blockchain.transactions import Transaction
-from loopchain.blockchain.exception import InvalidUnconfirmedBlock, DuplicationUnconfirmedBlock, ScoreInvokeError, \
-    ConfirmInfoInvalid,  ConfirmInfoInvalidAddedBlock, ConfirmInfoInvalidNeedBlockSync
-from loopchain.blockchain.votes.v0_1a import BlockVote, LeaderVote, BlockVotes, LeaderVotes
 from loopchain.blockchain.types import ExternalAddress
+from loopchain.blockchain.types import TransactionStatusInQueue, Hash32
+from loopchain.blockchain.votes.v0_1a import BlockVote, LeaderVote, BlockVotes, LeaderVotes
 from loopchain.channel.channel_property import ChannelProperty
-from loopchain.peer import status_code
+from loopchain.p2p import status_code, message_code
+from loopchain.p2p.grpc_helper.grpc_message import P2PMessage
+from loopchain.p2p.p2p_service import PeerType, P2PService
 from loopchain.peer.consensus_siever import ConsensusSiever
-from loopchain.protos import loopchain_pb2, loopchain_pb2_grpc, message_code
-from loopchain.tools.grpc_helper import GRPCHelper
 from loopchain.utils.message_queue import StubCollection
 
 if TYPE_CHECKING:
@@ -75,7 +77,7 @@ class BlockManager:
         self.__block_height_thread_pool = ThreadPoolExecutor(1, 'BlockHeightSyncThread')
         self.__block_height_future: Future = None
         self.__precommit_block: Block = None
-        self.set_peer_type(loopchain_pb2.PEER)
+        self.set_peer_type(PeerType.PEER)
         self.name = name
         self.__service_status = status_code.Service.online
 
@@ -184,16 +186,14 @@ class BlockManager:
         if self.__channel_service.state_machine.state == "BlockGenerate":
             logging.debug(f"BroadCast AnnounceUnconfirmedBlock "
                           f"height({block_.header.height}) block({block_.header.hash}) peers: "
-                          f"{ObjectManager().channel_service.peer_manager.get_peer_count()}")
+                          f"{self.__channel_service.peer_manager.get_peer_count()}")
 
             # util.logger.spam(f'block_manager:zip_test num of tx is {block_.confirmed_tx_len}')
             block_dumped = self.__blockchain.block_dumps(block_)
 
-            ObjectManager().channel_service.broadcast_scheduler.schedule_broadcast(
+            self.__channel_service.broadcast_scheduler.schedule_broadcast(
                 "AnnounceUnconfirmedBlock",
-                loopchain_pb2.BlockSend(
-                    block=block_dumped,
-                    channel=self.__channel_name))
+                P2PMessage.block_send(block=block_dumped, channel=self.__channel_name))
 
     def add_tx_obj(self, tx):
         """전송 받은 tx 를 Block 생성을 위해서 큐에 입력한다. load 하지 않은 채 입력한다.
@@ -367,14 +367,20 @@ class BlockManager:
         :param block_height:
         :return block, max_block_height, confirm_info, response_code
         """
-        if ObjectManager().channel_service.is_support_node_function(conf.NodeFunction.Vote):
+        if self.__channel_service.is_support_node_function(conf.NodeFunction.Vote):
             return self.__block_request_by_voter(block_height, peer_stub)
         else:
             # request REST(json-rpc) way to RS peer
-            return self.__block_request_by_citizen(block_height, ObjectManager().channel_service.radio_station_stub)
+            return self.__block_request_by_citizen(block_height, self.__channel_service.radio_station_stub)
 
     def __block_request_by_voter(self, block_height, peer_stub):
+        """
         response = peer_stub.BlockSync(loopchain_pb2.BlockSyncRequest(
+            block_height=block_height,
+            channel=self.__channel_name
+        ), conf.GRPC_TIMEOUT)
+        """
+        response = peer_stub.BlockSync(P2PMessage.block_sync_request(
             block_height=block_height,
             channel=self.__channel_name
         ), conf.GRPC_TIMEOUT)
@@ -423,7 +429,7 @@ class BlockManager:
         :param block_height:
         :return block, max_block_height, response_code
         """
-        response = peer_stub.GetPrecommitBlock(loopchain_pb2.PrecommitBlockRequest(
+        response = peer_stub.GetPrecommitBlock(P2PMessage.precommit_block_request(
             last_block_height=last_block_height,
             channel=self.__channel_name
         ), conf.GRPC_TIMEOUT)
@@ -542,6 +548,7 @@ class BlockManager:
         self.__blockchain.set_invoke_results(prev_block.header.hash.hex(), invoke_results)
         return self.__blockchain.add_block(prev_block, confirm_info)
 
+    # FIXME : peer_stubs... (start)
     def __block_request_to_peers_in_sync(self, peer_stubs, my_height, unconfirmed_block_height, max_height):
         """Extracted func from __block_height_sync.
         It has block request loop with peer_stubs for block height sync.
@@ -698,8 +705,8 @@ class BlockManager:
         unconfirmed_block_height = -1
         peer_stubs = []     # peer stub list for block height synchronization
 
-        if not ObjectManager().channel_service.is_support_node_function(conf.NodeFunction.Vote):
-            rest_stub = ObjectManager().channel_service.radio_station_stub
+        if not self.__channel_service.is_support_node_function(conf.NodeFunction.Vote):
+            rest_stub = self.__channel_service.radio_station_stub
             peer_stubs.append(rest_stub)
             last_block = rest_stub.call("GetLastBlock")
             max_height = self.__blockchain.block_versioner.get_height(last_block)
@@ -708,7 +715,7 @@ class BlockManager:
 
         # Make Peer Stub List [peer_stub, ...] and get max_height of network
         peer_target = ChannelProperty().peer_target
-        peer_manager = ObjectManager().channel_service.peer_manager
+        peer_manager = self.__channel_service.peer_manager
         target_dict = peer_manager.get_IP_of_peers_dict()
         target_list = [peer_target for peer_id, peer_target in target_dict.items()
                        if peer_id != ChannelProperty().peer_id]
@@ -716,12 +723,11 @@ class BlockManager:
         for target in target_list:
             if target != peer_target:
                 logging.debug(f"try to target({target})")
-                channel = GRPCHelper().create_client_channel(target)
-                stub = loopchain_pb2_grpc.PeerServiceStub(channel)
+                stub = P2PService.get_peer_service_stub(target)
                 try:
-                    response = stub.GetStatus(loopchain_pb2.StatusRequest(
+                    response = stub.GetStatus(P2PMessage.status_request(
                         request="",
-                        channel=self.__channel_name,
+                        channel=self.__channel_name
                     ), conf.GRPC_TIMEOUT_SHORT)
 
                     response.block_height = max(response.block_height, response.unconfirmed_block_height)
@@ -736,6 +742,7 @@ class BlockManager:
                     logging.warning(f"This peer has already been removed from the block height target node. {e}")
 
         return max_height, unconfirmed_block_height, peer_stubs
+    # FIXME : peer_stubs... (end)
 
     def __close_level_db(self):
         del self.__level_db
@@ -794,7 +801,7 @@ class BlockManager:
 
         leader_vote_serialized = leader_vote.serialize()
         leader_vote_dumped = json.dumps(leader_vote_serialized)
-        request = loopchain_pb2.ComplainLeaderRequest(
+        request = P2PMessage.complain_leader_request(
             complain_vote=leader_vote_dumped,
             channel=self.channel_name
         )
@@ -818,7 +825,9 @@ class BlockManager:
 
         vote_serialized = vote.serialize()
         vote_dumped = json.dumps(vote_serialized)
-        block_vote = loopchain_pb2.BlockVote(vote=vote_dumped, channel=ChannelProperty().name)
+
+        # FIXME : which one is right? ChannelProperty().name or self.channel_name
+        block_vote = P2PMessage.block_vote(vote=vote_dumped, channel=ChannelProperty().name)
 
         self.__channel_service.broadcast_scheduler.schedule_broadcast("VoteUnconfirmedBlock", block_vote)
         return vote

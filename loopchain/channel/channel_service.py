@@ -24,11 +24,10 @@ from earlgrey import MessageQueueService
 
 from loopchain import configure as conf
 from loopchain import utils
-from loopchain.baseservice import BroadcastScheduler, BroadcastSchedulerFactory, BroadcastCommand, PeerListData, \
-    PeerInfo
 from loopchain.baseservice import ObjectManager, CommonSubprocess
+from loopchain.baseservice import BroadcastScheduler, BroadcastSchedulerFactory, BroadcastCommand, PeerInfo
+from loopchain.baseservice import PeerListData, PeerManager, PeerStatus, TimerService
 from loopchain.baseservice import RestStubManager, NodeSubscriber
-from loopchain.baseservice import StubManager, PeerManager, PeerStatus, TimerService
 from loopchain.blockchain import Epoch, AnnounceNewBlockError
 from loopchain.blockchain.blocks import Block, BlockBuilder
 from loopchain.blockchain.transactions import TransactionSerializer
@@ -37,8 +36,10 @@ from loopchain.channel.channel_inner_service import ChannelInnerService
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.channel.channel_statemachine import ChannelStateMachine
 from loopchain.crypto.signature import Signer
+from loopchain.p2p import message_code
+from loopchain.p2p.grpc_helper.grpc_message import P2PMessage
+from loopchain.p2p.p2p_service import PeerType
 from loopchain.peer import BlockManager
-from loopchain.protos import loopchain_pb2_grpc, message_code, loopchain_pb2
 from loopchain.utils import loggers, command_arguments
 from loopchain.utils.icon_service import convert_params, ParamType, response_to_json_query
 from loopchain.utils.message_queue import StubCollection
@@ -359,6 +360,7 @@ class ChannelService:
 
     def __init_radio_station_stub(self):
         if self.is_support_node_function(conf.NodeFunction.Vote):
+            """
             if conf.ENABLE_REP_RADIO_STATION:
                 # FIXME : move to p2p_service
                 self.__radio_station_stub = StubManager.get_stub_manager_to_server(
@@ -366,6 +368,9 @@ class ChannelService:
                     loopchain_pb2_grpc.RadioStationStub,
                     conf.CONNECTION_RETRY_TIMEOUT_TO_RS,
                     ssl_auth_type=conf.GRPC_SSL_TYPE)
+            """
+            from loopchain.p2p.p2p_service import get_radio_station_stub
+            self.__radio_station_stub = get_radio_station_stub(ChannelProperty().radio_station_target)
         else:
             self.__radio_station_stub = RestStubManager(ChannelProperty().radio_station_target, ChannelProperty().name)
 
@@ -466,14 +471,25 @@ class ChannelService:
         blockchain.generate_genesis_block(reps)
 
     def connect_to_radio_station(self, is_reconnect=False):
-        response = self.__radio_station_stub.call_in_times(
-            method_name="ConnectPeer",
-            message=loopchain_pb2.ConnectPeerRequest(
+        """
+        loopchain_pb2.ConnectPeerRequest(
                 channel=ChannelProperty().name,
                 peer_object=b'',
                 peer_id=ChannelProperty().peer_id,
                 peer_target=ChannelProperty().peer_target,
                 group_id=ChannelProperty().peer_id),
+        """
+
+        connect_peer_request_message = P2PMessage.get_connect_peer_request_message(
+            peer_id=ChannelProperty().peer_id,
+            channel=ChannelProperty().name,
+            peer_target=ChannelProperty().peer_target,
+            group_id=ChannelProperty().peer_id,
+            peer_object=b'')
+
+        response = self.__radio_station_stub.call_in_times(
+            method_name="ConnectPeer",
+            message=connect_peer_request_message,
             retry_times=conf.CONNECTION_RETRY_TIMES_TO_RS,
             is_stub_reuse=True,
             timeout=conf.CONNECTION_TIMEOUT_TO_RS)
@@ -559,8 +575,9 @@ class ChannelService:
             logging.warning("Fail Save Peer_list: " + str(e))
 
     async def set_peer_type_in_channel(self):
-        peer_type = loopchain_pb2.PEER
-        blockchain = self.__block_manager.get_blockchain()
+        #peer_type = loopchain_pb2.PEER
+        peer_type = PeerType.PEER
+        blockchain = self.block_manager.get_blockchain()
         last_block = blockchain.last_unconfirmed_block or blockchain.last_block
 
         leader_id = None
@@ -579,7 +596,8 @@ class ChannelService:
         if ChannelProperty().peer_id == leader_id:
             logger_preset.is_leader = True
             logging.debug(f"Set Peer Type Leader! channel({ChannelProperty().name})")
-            peer_type = loopchain_pb2.BLOCK_GENERATOR
+            #peer_type = loopchain_pb2.BLOCK_GENERATOR
+            peer_type = PeerType.BLOCK_GENERATOR
         else:
             logger_preset.is_leader = False
         logger_preset.update_logger()
@@ -645,11 +663,13 @@ class ChannelService:
 
         if self_peer_object.peer_id == leader_peer.peer_id:
             logging.debug("Set Peer Type Leader!")
-            peer_type = loopchain_pb2.BLOCK_GENERATOR
+            # peer_type = loopchain_pb2.BLOCK_GENERATOR
+            peer_type = PeerType.BLOCK_GENERATOR
             self.state_machine.turn_to_leader()
         else:
             logging.debug("Set Peer Type Peer!")
-            peer_type = loopchain_pb2.PEER
+            # peer_type = loopchain_pb2.PEER
+            peer_type = PeerType.BLOCK_GENERATOR
             self.state_machine.turn_to_peer()
 
         self.__block_manager.set_peer_type(peer_type)

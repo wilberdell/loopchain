@@ -26,10 +26,12 @@ from sanic.views import HTTPMethodView
 
 from loopchain import configure as conf, utils
 from loopchain.baseservice import PeerListData, PeerManager, PeerStatus, PeerInfo
-from loopchain.baseservice import StubManager
 from loopchain.baseservice.ca_service import CAService
 from loopchain.components import SingletonMetaClass
-from loopchain.protos import loopchain_pb2, loopchain_pb2_grpc, message_code
+from loopchain.p2p import message_code
+from loopchain.p2p.grpc_helper.grpc_message import P2PMessage
+from loopchain.p2p.p2p_service import P2PRadiostationService, PeerType
+from loopchain.p2p.stub_manager import StubManager
 
 
 def get_channel_name_from_args(args) -> str:
@@ -37,10 +39,15 @@ def get_channel_name_from_args(args) -> str:
 
 
 class ServerComponents(metaclass=SingletonMetaClass):
+    """
+    rest server for radio station
+    FIXME : change class name
+    """
+
     def __init__(self):
         self.__app = Sanic(__name__)
         self.__app.config.KEEP_ALIVE = False
-        self.__stub_to_rs_service = None
+        self.__stub_to_rs_service: StubManager = None
 
         # SSL 적용 여부에 따라 context 생성 여부를 결정한다.
         if conf.REST_SSL_TYPE is conf.SSLAuthType.none:
@@ -59,6 +66,8 @@ class ServerComponents(metaclass=SingletonMetaClass):
             utils.exit_and_msg(
                 f"REST_SSL_TYPE must be one of [0,1,2]. But now conf.REST_SSL_TYPE is {conf.REST_SSL_TYPE}")
 
+        self._p2p_service = P2PRadiostationService()
+
     @property
     def app(self):
         return self.__app
@@ -72,9 +81,9 @@ class ServerComponents(metaclass=SingletonMetaClass):
         return self.__ssl_context
 
     def set_stub_port(self, port):
-        self.__stub_to_rs_service = StubManager(
-            conf.IP_LOCAL + ':' + str(port), loopchain_pb2_grpc.RadioStationStub, ssl_auth_type=conf.GRPC_SSL_TYPE
-        )
+        target = conf.IP_LOCAL + ':' + str(port)
+        self._p2p_service.add_client(target)
+        self.__stub_to_rs_service = self._p2p_service.get_client(target)
 
     def set_resource(self):
         self.__app.add_route(Peer.as_view(), '/api/v1/peer/<request_type:string>')
@@ -84,32 +93,32 @@ class ServerComponents(metaclass=SingletonMetaClass):
     def get_peer_list(self, channel):
         return self.__stub_to_rs_service.call(
             "GetPeerList",
-            loopchain_pb2.CommonRequest(request="", group_id="all_group_id", channel=channel))
+            P2PMessage.common_request(request="", group_id="all_group_id", channel=channel))
 
     def get_leader_peer(self, channel):
         return self.__stub_to_rs_service.call(
             "Request",
-            loopchain_pb2.Message(code=message_code.Request.peer_get_leader, channel=channel))
+            P2PMessage.get_message(code=message_code.Request.peer_get_leader, channel=channel))
 
     def get_peer_status(self, peer_id, group_id, channel):
         return self.__stub_to_rs_service.call_in_times(
             "GetPeerStatus",
-            loopchain_pb2.PeerID(peer_id=peer_id, group_id=group_id, channel=channel))
+            P2PMessage.get_peer_id(peer_id=peer_id, group_id=group_id, channel=channel))
 
     def get_peer_status_async(self, peer_id, group_id, channel) -> grpc.Future:
         return self.__stub_to_rs_service.call_async(
             "GetPeerStatus",
-            loopchain_pb2.PeerID(peer_id=peer_id, group_id=group_id, channel=channel))
+            P2PMessage.get_peer_id(peer_id=peer_id, group_id=group_id, channel=channel))
 
     def get_configuration(self, conf_info):
         return self.__stub_to_rs_service.call(
             "Request",
-            loopchain_pb2.Message(code=message_code.Request.rs_get_configuration, meta=conf_info))
+            P2PMessage.get_message(code=message_code.Request.rs_get_configuration, meta=conf_info))
 
     def set_configuration(self, conf_info):
         return self.__stub_to_rs_service.call(
             "Request",
-            loopchain_pb2.Message(code=message_code.Request.rs_set_configuration, meta=conf_info))
+            P2PMessage.get_message(code=message_code.Request.rs_set_configuration, meta=conf_info))
 
     def response_simple_success(self):
         result = {
@@ -176,9 +185,9 @@ class Peer(HTTPMethodView):
                     peer_data = peer_each.serialize()
 
                     if peer_each.peer_id == leader_peer_id:
-                        peer_data['peer_type'] = loopchain_pb2.BLOCK_GENERATOR
+                        peer_data['peer_type'] = PeerType.BLOCK_GENERATOR
                     else:
-                        peer_data['peer_type'] = loopchain_pb2.PEER
+                        peer_data['peer_type'] = PeerType.PEER
 
                     all_peer_list.append(peer_data)
 
@@ -278,6 +287,7 @@ class Peer(HTTPMethodView):
         return result
 
 
+# FIXME : change class name
 class Configuration(HTTPMethodView):
     async def get(self, request):
         # args = ServerComponents().parser.parse_args()

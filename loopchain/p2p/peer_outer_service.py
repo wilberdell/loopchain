@@ -17,13 +17,12 @@ import asyncio
 import copy
 import datetime
 import json
-import pickle
+import logging
 from functools import partial
 
-from loopchain.baseservice import TimerService
-from loopchain.blockchain import *
-from loopchain.peer import status_code
-from loopchain.protos import loopchain_pb2_grpc, message_code, ComplainLeaderRequest, loopchain_pb2
+from loopchain import utils, configure as conf
+from loopchain.p2p import status_code, message_code
+from loopchain.p2p.protos import loopchain_pb2, loopchain_pb2_grpc, ComplainLeaderRequest
 from loopchain.utils.message_queue import StubCollection
 
 
@@ -47,6 +46,8 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
 
     @property
     def peer_service(self):
+        # TODO : remove ObjectManager
+        from loopchain.baseservice import ObjectManager
         return ObjectManager().peer_service
 
     def __handler_status(self, request, context):
@@ -61,7 +62,8 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
 
         # FIXME : is need?
         if conf.ENABLE_REP_RADIO_STATION and request.message == "check peer status by rs":
-            channel_stub.sync_task().reset_timer(TimerService.TIMER_KEY_CONNECT_PEER)
+            # FIXME : TIMER_KEY_CONNECT_PEER from TimerService
+            channel_stub.sync_task().reset_timer("TIMER_KEY_CONNECT_PEER")
 
         callback = partial(self.__status_update, request.channel)
         future = asyncio.run_coroutine_threadsafe(
@@ -176,6 +178,8 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
     def __handler_reconnect_to_rs(self, request, context):
         logging.warning(f"RS lost peer info (candidate reason: RS restart)")
         logging.warning(f"try reconnect to RS....")
+        # FIXME : remove ObjectManager
+        from loopchain.baseservice import ObjectManager
         ObjectManager().channel_service.connect_to_radio_station(is_reconnect=True)
 
         return loopchain_pb2.Message(code=message_code.Response.success)
@@ -183,6 +187,8 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
     def __handler_restart_channel(self, request, context):
         logging.debug(f"Restart_channel({request.channel}) code({request.code}), message({request.message})")
 
+        # FIXME : remove ObjectManager
+        from loopchain.baseservice import ObjectManager
         ObjectManager().peer_service.start_channel(
             channel=request.channel,
             is_restart=True
@@ -260,6 +266,8 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
 
         status_data = self.__get_status_data(channel_name)
         if status_data is None:
+            # FIXME : remove import from loopchain
+            from loopchain.blockchain import ChannelStatusError
             raise ChannelStatusError(f"Fail get status data from channel({channel_name})")
 
         status_data = copy.deepcopy(status_data)
@@ -335,7 +343,7 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
                 channel_stub = StubCollection().channel_stubs[channel_name]
                 asyncio.run_coroutine_threadsafe(channel_stub.async_task().stop(), self.peer_service.inner_service.loop)
 
-            self.peer_service.p2p_server_stop()
+            self.peer_service.stop_p2p_server()
 
         except Exception as e:
             logging.debug("Score Service Already stop by other reason. %s", e)
@@ -366,6 +374,7 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
 
     def CreateTx(self, request, context):
         """make tx by client request and broadcast it to the network
+        FIXME : deprecated
 
         :param request:
         :param context:
@@ -524,8 +533,7 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
 
     def Query(self, request, context):
         """
-        FIXME : not use?
-        deprecated
+        FIXME : deprecated?
         """
         # channel_name = conf.LOOPCHAIN_DEFAULT_CHANNEL if request.channel == '' else request.channel
 
@@ -622,8 +630,8 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
                 self.peer_service.inner_service.loop
             )
             utils.logger.debug(f"peer_outer_service::Subscribe add_audience "
-                              f"target({request.peer_target}) in channel({request.channel}), "
-                              f"order({request.peer_order})")
+                               f"target({request.peer_target}) in channel({request.channel}), "
+                               f"order({request.peer_order})")
         else:
             logging.error(f"This target({request.peer_target}, {request.node_type}) failed to subscribe.")
             return loopchain_pb2.CommonReply(response_code=message_code.get_response_code(message_code.Response.fail),
@@ -651,7 +659,7 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
                 self.peer_service.inner_service.loop
             )
             utils.logger.spam(f"peer_outer_service::Unsubscribe remove_audience target({request.peer_target}) "
-                             f"in channel({request.channel})")
+                              f"in channel({request.channel})")
         else:
             logging.error(f"This target({request.peer_target}), {request.node_type} failed to unsubscribe.")
             return loopchain_pb2.CommonReply(response_code=message_code.get_response_code(message_code.Response.fail),
@@ -701,6 +709,8 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
         :param context:
         :return:
         """
+        # TODO : remove ObjectManager
+        from loopchain.baseservice import ObjectManager
         logging.info(f"peer_outer_service:GetChannelInfos target({request.peer_target}) "
                      f"channel_infos({ObjectManager().peer_service.channel_infos})")
 

@@ -24,9 +24,9 @@ from loopchain import configure as conf
 from loopchain.baseservice import ObjectManager, TimerService, Timer
 from loopchain.container import RestServiceRS
 from loopchain.peer import ChannelManager
-from loopchain.protos import loopchain_pb2_grpc
+from loopchain.p2p.protos import loopchain_pb2_grpc
 from loopchain.radiostation import OuterService, AdminService, AdminManager
-from loopchain.tools.grpc_helper import GRPCHelper
+from loopchain.p2p.grpc_helper import GRPCHelper
 from loopchain.utils import loggers
 from .certificate_authorization import CertificateAuthorization
 

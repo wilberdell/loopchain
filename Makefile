@@ -49,7 +49,10 @@ generate: generate-proto generate-key
 # Generate python gRPC proto
 generate-proto:
 	@echo "Generating python grpc code from proto into > " `pwd`
-	python3 -m grpc.tools.protoc -I'./loopchain/protos' --python_out='./loopchain/protos' --grpc_python_out='./loopchain/protos' './loopchain/protos/loopchain.proto'
+	python3 -m grpc.tools.protoc -I'./loopchain/p2p/protos' \
+		--python_out='./loopchain/p2p/protos' \
+		--grpc_python_out='./loopchain/p2p/protos' \
+		'./loopchain/p2p/protos/loopchain.proto'
 
 # Generate a key
 generate-key:

@@ -21,7 +21,8 @@ import loopchain_pb2
 import loopchain.utils as util
 from loopchain import configure as conf
 from loopchain.baseservice import ObjectManager
-from loopchain.protos import loopchain_pb2_grpc, message_code
+from loopchain.p2p.protos import loopchain_pb2_grpc
+from loopchain.p2p import message_code
 
 
 class AdminService(loopchain_pb2_grpc.RadioStationServicer):
