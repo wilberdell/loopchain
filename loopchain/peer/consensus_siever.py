@@ -22,10 +22,10 @@ import loopchain.utils as util
 from loopchain import configure as conf
 from loopchain.baseservice import ObjectManager, TimerService, SlotTimer, Timer
 from loopchain.blockchain import Epoch
-from loopchain.blockchain.votes.v0_1a import BlockVotes
 from loopchain.blockchain.blocks import Block
+from loopchain.blockchain.exception import NotEnoughVotes, InvalidBlock
 from loopchain.blockchain.types import ExternalAddress, Hash32
-from loopchain.blockchain.exception import NotEnoughVotes
+from loopchain.blockchain.votes.v0_1a import BlockVotes
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.peer.consensus_base import ConsensusBase
 
@@ -96,6 +96,8 @@ class ConsensusSiever(ConsensusBase):
         vote = await self._wait_for_voting(block)
         if not vote:
             raise NotEnoughVotes
+        elif not vote.get_result():
+            raise InvalidBlock
 
         self._blockchain.add_block(block, confirm_info=vote.votes)
         self._block_manager.candidate_blocks.remove_block(block.header.hash)
@@ -163,7 +165,7 @@ class ConsensusSiever(ConsensusBase):
                 elif last_unconfirmed_block:
                     await self.__add_block(last_unconfirmed_block)
                     self._block_manager.epoch = Epoch.new_epoch(ChannelProperty().peer_id)
-            except NotEnoughVotes:
+            except (NotEnoughVotes, InvalidBlock):
                 need_next_call = True
             finally:
                 if need_next_call:
