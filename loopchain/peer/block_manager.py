@@ -66,7 +66,7 @@ class BlockManager:
         self.__txQueue = AgingCache(max_age_seconds=conf.MAX_TX_QUEUE_AGING_SECONDS,
                                     default_item_status=TransactionStatusInQueue.normal)
         self.blockchain = BlockChain(channel_name=channel_name, store_id=store_identity, block_manager=self,
-                                     peer_address=self.__channel_service.peer_address)
+                                     peer_address=self.__channel_service.peer_address, peer_auth=self.__channel_service.peer_auth)
         self.__peer_type = None
         self.__consensus = None
         self.__consensus_algorithm = None
@@ -729,7 +729,7 @@ class BlockManager:
             complained_leader_id = ""
 
         leader_vote = LeaderVote.new(
-            signer=ChannelProperty().peer_auth,
+            signer=self.__channel_service.peer_auth,
             block_height=self.epoch.height,
             old_leader=ExternalAddress.fromhex_address(complained_leader_id),
             new_leader=ExternalAddress.fromhex_address(new_leader_id),
@@ -757,7 +757,7 @@ class BlockManager:
         logging.debug(f"block_manager:vote_unconfirmed_block ({self.channel_name}/{is_validated})")
 
         vote = BlockVote.new(
-            signer=ChannelProperty().peer_auth,
+            signer=self.__channel_service.peer_auth,
             block_height=block.header.height,
             block_hash=block.header.hash if is_validated else Hash32.empty(),
             timestamp=util.get_time_stamp()

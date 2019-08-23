@@ -72,7 +72,7 @@ class BlockChain:
     INVOKE_RESULT_BLOCK_HEIGHT_KEY = b'invoke_result_block_height_key'
 
     def __init__(self, channel_name=None, store_id=None, block_manager=None,
-                 peer_address=None):
+                 peer_address=None, peer_auth=None):
         if channel_name is None:
             channel_name = conf.LOOPCHAIN_DEFAULT_CHANNEL
 
@@ -86,6 +86,7 @@ class BlockChain:
         self.__channel_name = channel_name
         self.__peer_id = ChannelProperty().peer_id
         self.__peer_address = peer_address
+        self.__peer_auth = peer_auth
         self.__block_manager: BlockManager = block_manager
 
         store_id = f"{store_id}_{channel_name}"
@@ -201,6 +202,10 @@ class BlockChain:
     @property
     def peer_address(self):
         return self.__peer_address
+
+    @property
+    def peer_auth(self):
+        return self.__peer_auth
 
     def get_blockchain_store(self):
         return self._blockchain_store
@@ -756,7 +761,7 @@ class BlockChain:
 
         return tx_info_json
 
-    def __add_genesis_block(self, tx_info: dict, reps: List[ExternalAddress]):
+    def __add_genesis_block(self, tx_info: dict, reps: List[ExternalAddress], peer_auth):
         """
         :param tx_info: Transaction data for making genesis block from an initial file
         :return:
@@ -780,7 +785,7 @@ class BlockChain:
         block_builder.transactions[tx.hash] = tx
         block_builder.reps = reps
         block_builder.prev_hash = Hash32.new()
-        block_builder.signer = ChannelProperty().peer_auth
+        block_builder.signer = peer_auth
         block_builder.prev_votes = []
         block_builder.leader_votes = []
         block = block_builder.build()  # It does not have commit state. It will be rebuilt.
@@ -908,7 +913,7 @@ class BlockChain:
             self.__block_height = self.__last_block.header.height
         logging.debug(f"ENGINE-303 init_blockchain: {self.__block_height}")
 
-    def generate_genesis_block(self, reps: List[ExternalAddress]):
+    def generate_genesis_block(self, reps: List[ExternalAddress], peer_auth):
         tx_info = None
         nid = NID.unknown.value
         genesis_data_path = conf.CHANNEL_OPTION[self.__channel_name]["genesis_data_path"]
@@ -923,7 +928,7 @@ class BlockChain:
         except KeyError as e:
             exit(f"cannot find key name of {e} in genesis data file.")
 
-        self.__add_genesis_block(tx_info, reps)
+        self.__add_genesis_block(tx_info, reps, peer_auth)
         self.put_nid(nid)
         self.__nid = nid
 
@@ -1064,7 +1069,7 @@ class BlockChain:
         block_builder.receipts = tx_receipts
         block_builder.reps = ObjectManager().channel_service.get_rep_ids()
         if block.header.peer_id and block.header.peer_id.hex_hx() == ChannelProperty().peer_id:
-            block_builder.signer = ChannelProperty().peer_auth
+            block_builder.signer = self.__peer_auth
         else:
             block_builder.signature = block.header.signature
         new_block = block_builder.build()
@@ -1164,7 +1169,7 @@ class BlockChain:
         block_builder.next_reps_hash = next_preps_hash
 
         if _block.header.peer_id.hex_hx() == ChannelProperty().peer_id:
-            block_builder.signer = ChannelProperty().peer_auth
+            block_builder.signer = self.__peer_auth
         else:
             block_builder.signature = _block.header.signature
         new_block = block_builder.build()
