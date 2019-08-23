@@ -1043,7 +1043,7 @@ class BlockChain:
             'transactions': transactions
         }
         request = convert_params(request, ParamType.invoke)
-        stub = StubCollection().icon_score_stubs[ChannelProperty().name]
+        stub = StubCollection().icon_score_stubs[self.__channel_name]
         response = stub.sync_task().invoke(request)
         response_to_json_query(response)
 
@@ -1052,7 +1052,7 @@ class BlockChain:
         block_builder.reset_cache()
         block_builder.peer_id = block.header.peer_id
         block_builder.commit_state = {
-            ChannelProperty().name: response['stateRootHash']
+            self.__channel_name: response['stateRootHash']
         }
         block_builder.state_hash = Hash32(bytes.fromhex(response['stateRootHash']))
         block_builder.receipts = tx_receipts
@@ -1105,7 +1105,7 @@ class BlockChain:
         }
 
         request = convert_params(request_origin, ParamType.invoke)
-        stub = StubCollection().icon_score_stubs[ChannelProperty().name]
+        stub = StubCollection().icon_score_stubs[self.__channel_name]
         response: dict = cast(dict, stub.sync_task().invoke(request))
         response_to_json_query(response)
 
@@ -1150,7 +1150,7 @@ class BlockChain:
                 block_builder.transactions[tx.hash] = tx
 
         block_builder.commit_state = {
-            ChannelProperty().name: response['stateRootHash']
+            self.__channel_name: response['stateRootHash']
         }
         block_builder.state_hash = Hash32(bytes.fromhex(response['stateRootHash']))
         block_builder.receipts = tx_receipts
