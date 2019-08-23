@@ -141,7 +141,7 @@ class ConsensusSiever(ConsensusBase):
             if last_block_header.version != '0.1a':
                 reps_switched = last_block_header.reps_hash != last_block_header.next_reps_hash
                 block_deprecated = (last_unconfirmed_block is None
-                                    or last_unconfirmed_block.header.peer_id != ChannelProperty().peer_address)
+                                    or last_unconfirmed_block.header.peer_id != self._blockchain.peer_address)
                 if reps_switched and block_deprecated:
                     new_term = True
 

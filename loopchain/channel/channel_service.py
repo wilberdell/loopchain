@@ -60,6 +60,7 @@ class ChannelService:
         self.__radio_station_target = None
         self.__peer_port = None
         self.__peer_target = None
+        self.__peer_address = None
 
         loggers.get_preset().channel_name = channel_name
         loggers.get_preset().update_logger()
@@ -106,6 +107,10 @@ class ChannelService:
     @property
     def peer_target(self):
         return self.__peer_target
+
+    @property
+    def peer_address(self):
+        return self.__peer_address
 
     @property
     def channel_name(self):
@@ -211,7 +216,7 @@ class ChannelService:
         self.__rest_target = kwargs.get('rest_target')
         self.__radio_station_target = kwargs.get('rs_target')
         ChannelProperty().peer_id = kwargs.get('peer_id')
-        ChannelProperty().peer_address = ExternalAddress.fromhex_address(ChannelProperty().peer_id)
+        self.__peer_address = ExternalAddress.fromhex_address(ChannelProperty().peer_id)
 
         # FIXME this is temporary setting for node_type.
         if self.__radio_station_target:
