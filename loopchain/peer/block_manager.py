@@ -660,7 +660,7 @@ class BlockManager:
             return max_height, unconfirmed_block_height, peer_stubs
 
         # Make Peer Stub List [peer_stub, ...] and get max_height of network
-        peer_target = ChannelProperty().peer_target
+        peer_target = self.__channel_service.peer_target
         target_list = [peer.target for peer_id, peer in self.__channel_service.peer_manager.peer_list.items()
                        if peer_id != ChannelProperty().peer_id]
 
