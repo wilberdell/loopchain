@@ -219,9 +219,8 @@ class BlockManager:
         confirmed_block = self.blockchain.confirm_prev_block(current_block)
         if confirmed_block is None:
             return
-
-        # stop leader complain timer
-        self.__channel_service.stop_leader_complain_timer()
+        elif confirmed_block.header.hash == self.blockchain.get_last_block_of_unconfirmed_block().header.hash:
+            return confirmed_block
 
         # start new epoch
         if not (current_block.header.complained and self.epoch.complained_result):
@@ -269,13 +268,16 @@ class BlockManager:
             need_to_confirm = False
 
         try:
-            if need_to_confirm:
-                self.confirm_prev_block(unconfirmed_block)
-            elif last_unconfirmed_block is None:
+            if need_to_confirm and not self.confirm_prev_block(unconfirmed_block):
+                return
+
+            # util.logger.warning(f"==={self.blockchain.last_unconfirmed_block.header}")
+            if last_unconfirmed_block is None:
                 if self.blockchain.last_block.header.hash != unconfirmed_block.header.prev_hash:
                     raise BlockchainError(f"last block is not previous block. block={unconfirmed_block}")
-
                 self.blockchain.last_unconfirmed_block = unconfirmed_block
+
+            # util.logger.warning(f"==={self.blockchain.last_unconfirmed_block.header}")
         except BlockchainError as e:
             logging.warning(f"BlockchainError while confirm_block({e}), retry block_height_sync")
             self.__channel_service.state_machine.block_sync()
@@ -791,8 +793,8 @@ class BlockManager:
                                                f"unconfirmed_block.header.height({unconfirmed_block.header.height})")
 
         block_verifier = BlockVerifier.new(unconfirmed_block.header.version, self.blockchain.tx_versioner)
-        last_unconfirmed_block = self.blockchain.last_unconfirmed_block
-        prev_block = last_unconfirmed_block if last_unconfirmed_block else self.blockchain.last_block
+        prev_block = self.blockchain.get_last_block_of_unconfirmed_block()
+        util.logger.warning(f"==={prev_block.header if prev_block else None}")
         try:
             block_verifier.verify_common(
                 unconfirmed_block,
@@ -800,8 +802,7 @@ class BlockManager:
                 unconfirmed_block.header.peer_id,
                 reps_getter=self.blockchain.find_preps_addresses_by_roothash)
         except Exception as e:
-            logging.error(e)
-            traceback.print_exc()
+            util.logger.spam(e)
             raise ConfirmInfoInvalid("Unconfirmed block has no valid confirm info for previous block")
 
     async def _vote(self, unconfirmed_block: Block):

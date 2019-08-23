@@ -795,10 +795,6 @@ class BlockChain:
         :param current_block: Next unconfirmed block what has votes for prev unconfirmed block.
         :return: confirm_Block
         """
-        # utils.logger.debug(f"-------------------confirm_prev_block---current_block is "
-        #                    f"tx count({len(current_block.body.transactions)}), "
-        #                    f"height({current_block.header.height})")
-
         candidate_blocks = self.__block_manager.candidate_blocks
         with self.__confirmed_block_lock:
             logging.debug(f"BlockChain:confirm_block channel({self.__channel_name})")
@@ -819,7 +815,8 @@ class BlockChain:
                     if current_block.header.complained and self.__block_manager.epoch.complained_result:
                         utils.logger.debug("reset last_unconfirmed_block by complain block")
                         self.last_unconfirmed_block = current_block
-                    return None
+                        return None
+                    return self.last_block
                 else:
                     except_msg = ("there is no unconfirmed block in this peer "
                                   f"block_hash({current_block.header.prev_hash.hex()})")
@@ -830,8 +827,6 @@ class BlockChain:
                 logging.warning("It's not possible to add block while check block hash is fail-")
                 raise BlockchainError('확인하는 블럭 해쉬 값이 다릅니다.')
 
-            # utils.logger.debug(f"-------------------confirm_prev_block---before add block,"
-            #                    f"height({unconfirmed_block.header.height})")
             confirm_info = current_block.body.prev_votes if current_block.header.version == "0.3" else None
             self.add_block(unconfirmed_block, confirm_info)
             self.last_unconfirmed_block = current_block
@@ -984,6 +979,9 @@ class BlockChain:
             return self.genesis_invoke
         else:
             return self.score_invoke
+
+    def get_last_block_of_unconfirmed_block(self):
+        return self.last_unconfirmed_block or self.last_block
 
     def genesis_invoke(self, block: Block, prev_block_ = None) -> ('Block', dict):
         method = "icx_sendTransaction"
