@@ -26,7 +26,6 @@ from loopchain.blockchain.transactions import Transaction, TransactionVerifier
 from loopchain.blockchain.types import TransactionStatusInQueue, ExternalAddress
 from loopchain.blockchain.votes.v0_1a import LeaderVotes, LeaderVote
 from loopchain.blockchain.votes.votes import VoteError
-from loopchain.channel.channel_property import ChannelProperty
 
 
 class Epoch:
