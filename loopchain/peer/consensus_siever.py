@@ -121,7 +121,7 @@ class ConsensusSiever(ConsensusBase):
     async def consensus(self):
         util.logger.debug(f"-------------------consensus-------------------")
         async with self.__lock:
-            if self._block_manager.epoch.leader_id != ChannelProperty().peer_id:
+            if self._block_manager.epoch.leader_id != self._blockchain.peer_id:
                 util.logger.warning(f"This peer is not leader. epoch leader={self._block_manager.epoch.leader_id}")
                 return
 
@@ -178,13 +178,13 @@ class ConsensusSiever(ConsensusBase):
                     need_next_call = True
                 elif last_unconfirmed_block:
                     await self.__add_block(last_unconfirmed_block)
-                    self._block_manager.epoch = Epoch.new_epoch(ChannelProperty().peer_id)
+                    self._block_manager.epoch = Epoch.new_epoch(self._blockchain.peer_id)
             except (NotEnoughVotes, InvalidBlock):
                 need_next_call = True
             except ThereIsNoCandidateBlock:
                 util.logger.debug(
                     f"There is no candidate block by height({last_unconfirmed_block.header.height}).")
-                self._block_manager.epoch = Epoch.new_epoch(ChannelProperty().peer_id)
+                self._block_manager.epoch = Epoch.new_epoch(self._blockchain.peer_id)
                 block_builder = self._makeup_new_block(
                     block_builder.version, complain_votes, self._blockchain.last_block.header.hash)
             finally:
@@ -210,11 +210,11 @@ class ConsensusSiever(ConsensusBase):
             except NotEnoughVotes:
                 return
 
-            if next_leader != ChannelProperty().peer_id:
+            if next_leader != self._blockchain.peer_id:
                 util.logger.spam(
                     f"-------------------turn_to_peer "
                     f"next_leader({next_leader}) "
-                    f"peer_id({ChannelProperty().peer_id})")
+                    f"peer_id({self._blockchain.peer_id})")
                 ObjectManager().channel_service.reset_leader(next_leader)
                 ObjectManager().channel_service.turn_on_leader_complain_timer()
             else:

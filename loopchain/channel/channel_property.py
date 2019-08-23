@@ -17,5 +17,4 @@ from loopchain.components import SingletonMetaClass
 
 class ChannelProperty(metaclass=SingletonMetaClass):
     def __init__(self):
-        self.peer_id = None
         self.peer_auth = None
