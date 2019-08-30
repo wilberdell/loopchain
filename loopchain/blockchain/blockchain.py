@@ -1115,20 +1115,23 @@ class BlockChain:
         else:
             tx_receipts = tx_receipts_origin
 
-        next_prep = response.get("prep")
-        if next_prep:
-            utils.logger.debug(
-                f"in score invoke current_height({_block.header.height}) next_prep({next_prep})")
-            next_preps_hash = Hash32.fromhex(next_prep["rootHash"], ignore_prefix=True)
-            ObjectManager().channel_service.peer_manager.reset_all_peers(
-                next_prep["rootHash"], next_prep['preps'], update_now=False)
-        else:
-            next_preps_hash = None
-
         if prev_block.header.version != "0.1a":
             reps = self.find_preps_addresses_by_roothash(_block.header.reps_hash)
         else:
             reps = ObjectManager().channel_service.get_rep_ids()
+
+        next_prep = response.get("prep")
+        if next_prep:
+            utils.logger.debug(
+                f"in score invoke current_height({_block.header.height}) next_prep({next_prep})")
+            ObjectManager().channel_service.peer_manager.reset_all_peers(
+                next_prep["rootHash"], next_prep['preps'], update_now=False)
+
+            next_preps = [ExternalAddress.fromhex(prep["id"]) for prep in next_prep["preps"]]
+            next_preps_hash = Hash32.fromhex(next_prep["rootHash"], ignore_prefix=True)
+        else:
+            next_preps = reps
+            next_preps_hash = None
 
         block_builder = BlockBuilder.from_new(_block, self.__tx_versioner)
         block_builder.reset_cache()
@@ -1155,6 +1158,7 @@ class BlockChain:
         block_builder.state_hash = Hash32(bytes.fromhex(response['stateRootHash']))
         block_builder.receipts = tx_receipts
         block_builder.reps = reps
+        block_builder.next_reps = next_preps
         block_builder.next_reps_hash = next_preps_hash
 
         if _block.header.peer_id.hex_hx() == ChannelProperty().peer_id:

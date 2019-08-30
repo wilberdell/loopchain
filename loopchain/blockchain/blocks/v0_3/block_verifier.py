@@ -16,8 +16,8 @@
 from typing import TYPE_CHECKING, Callable, Sequence
 
 from loopchain import configure as conf
-from loopchain.blockchain.blocks import BlockVerifier as BaseBlockVerifier, BlockBuilder
-from loopchain.blockchain.blocks.v0_3 import BlockHeader, BlockBody
+from loopchain.blockchain.blocks import BlockVerifier as BaseBlockVerifier
+from loopchain.blockchain.blocks.v0_3 import BlockHeader, BlockBody, BlockBuilder
 from loopchain.blockchain.exception import NotInReps
 from loopchain.blockchain.types import ExternalAddress, Hash32
 from loopchain.blockchain.votes.v0_3 import BlockVotes, LeaderVotes
