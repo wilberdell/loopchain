@@ -79,7 +79,7 @@ class BlockVerifier(BaseBlockVerifier):
 
         invoke_result = None
         if self.invoke_func:
-            self.verify_invoke(builder, block, prev_block, next_leader)
+            invoke_result = self.verify_invoke(builder, block, prev_block, next_leader)
 
         builder.build_transactions_hash()
         if header.transactions_hash != builder.transactions_hash:
