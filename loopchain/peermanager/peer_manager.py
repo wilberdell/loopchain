@@ -272,10 +272,15 @@ class PeerManager:
         """
 
         try:
-            if not isinstance(peer_id, str):
+            if isinstance(peer_id, str):
+                pass
+            elif isinstance(peer_id, ExternalAddress):
+                peer_id = peer_id.hex_hx()
+            else:
                 logging.error("peer_id type is: " + str(type(peer_id)) + ":" + str(peer_id))
+                peer_id = str(peer_id)
 
-            return self.peer_list[str(peer_id)]
+            return self.peer_list[peer_id]
 
         except KeyError:
             if ObjectManager().channel_service.is_support_node_function(conf.NodeFunction.Vote):

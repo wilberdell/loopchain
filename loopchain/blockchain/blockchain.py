@@ -142,17 +142,6 @@ class BlockChain:
         """
 
         peer_manager = ObjectManager().channel_service.peer_manager
-
-        if (self.last_block.header.version != '0.1a') and \
-                (self.last_block.header.reps_hash != self.last_block.header.next_reps_hash):
-            # TODO It needs additional features for new reps.
-            # - Keep order when changing list by penalty
-            # - If the list is changed due to the term, reset to order = 0
-            utils.logger.notice(
-                f"in get_next_leader new reps leader is "
-                f"{self.find_preps_ids_by_roothash(self.last_block.header.next_reps_hash)[0]}")
-            return self.find_preps_ids_by_roothash(self.last_block.header.next_reps_hash)[0]
-
         if self.leader_made_block_count == (conf.MAX_MADE_BLOCK_COUNT - 1):
             # (conf.MAX_MADE_BLOCK_COUNT - 1) means if made_block_count is 9,
             # next unconfirmed block height is 10 and It has to have changed next leader.
@@ -1115,6 +1104,10 @@ class BlockChain:
         else:
             tx_receipts = tx_receipts_origin
 
+        block_builder = BlockBuilder.from_new(_block, self.__tx_versioner)
+        block_builder.reset_cache()
+        block_builder.peer_id = _block.header.peer_id
+
         if prev_block.header.version != "0.1a":
             reps = self.find_preps_addresses_by_roothash(_block.header.reps_hash)
         else:
@@ -1127,15 +1120,13 @@ class BlockChain:
             ObjectManager().channel_service.peer_manager.reset_all_peers(
                 next_prep["rootHash"], next_prep['preps'], update_now=False)
 
+            block_builder.next_leader = None  # to rebuild next_leader
+            block_builder.next_reps_change_reason = int(next_prep["state"], 16)
             next_preps = [ExternalAddress.fromhex(prep["id"]) for prep in next_prep["preps"]]
             next_preps_hash = Hash32.fromhex(next_prep["rootHash"], ignore_prefix=True)
         else:
             next_preps = reps
             next_preps_hash = None
-
-        block_builder = BlockBuilder.from_new(_block, self.__tx_versioner)
-        block_builder.reset_cache()
-        block_builder.peer_id = _block.header.peer_id
 
         added_transactions = response.get("addedTransactions")
         if added_transactions:

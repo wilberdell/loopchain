@@ -1,4 +1,5 @@
 import time
+from enum import IntEnum
 from functools import reduce
 from operator import or_
 from typing import List
@@ -21,6 +22,7 @@ class BlockBuilder(BaseBlockBuilder):
         self.reps: List[ExternalAddress] = None
         self.next_reps: List[ExternalAddress] = None
         self.next_reps_hash: Hash32 = None
+        self.next_reps_change_reason = NextRepsChangeReason.NoChange
         self.leader_votes: List[LeaderVote] = []
         self.prev_votes: List[BlockVote] = None
 
@@ -150,6 +152,24 @@ class BlockBuilder(BaseBlockBuilder):
         block_prover = BlockProver((rep.extend() for rep in self.next_reps), BlockProverType.Rep)
         return block_prover.get_proof_root()
 
+    def build_next_leader(self):
+        if self.next_leader is not None:
+            return self.next_leader
+
+        self.next_leader = self._build_next_leader()
+        return self.next_leader
+
+    def _build_next_leader(self):
+        if self.next_reps_change_reason == NextRepsChangeReason.Term:
+            return self.next_reps[0]
+        elif self.next_reps_change_reason == NextRepsChangeReason.Update:
+            curr_index = self.reps.index(self.peer_id)
+            next_index = curr_index + 1
+            next_index = next_index if next_index < len(self.next_reps) else 0
+            return self.next_reps[next_index]
+        else:
+            return self.next_leader
+
     def build_leader_votes_hash(self):
         if self.leader_votes_hash is not None:
             return self.leader_votes_hash
@@ -203,6 +223,7 @@ class BlockBuilder(BaseBlockBuilder):
         self.build_receipts_hash()
         self.build_reps_hash()
         self.build_next_reps_hash()
+        self.build_next_leader()
         self.build_leader_votes_hash()
         self.build_prev_votes_hash()
         self.build_logs_bloom()
@@ -253,3 +274,9 @@ class BlockBuilder(BaseBlockBuilder):
         body: BlockBody = block.body
         self.leader_votes = body.leader_votes
         self.prev_votes = body.prev_votes
+
+
+class NextRepsChangeReason(IntEnum):
+    NoChange = -1
+    Term = 0
+    Update = 1

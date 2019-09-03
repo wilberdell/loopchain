@@ -67,10 +67,11 @@ class CandidateBlock:
             logging.debug(f"set block({block.header.hash.hex()}) in CandidateBlock")
             self.__block = block
 
-            if ObjectManager().channel_service:
+            if block.header.version == "0.1a":
                 reps = ObjectManager().channel_service.get_rep_ids()
             else:
-                reps = []
+                blockchain = ObjectManager().channel_service.block_manager.blockchain
+                reps = blockchain.find_preps_addresses_by_roothash(block.header.reps_hash)
             self.votes = BlockVotes(reps, conf.VOTING_RATIO, self.height, self.hash)
             for vote in self.votes_buffer:
                 try:

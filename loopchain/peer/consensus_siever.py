@@ -196,6 +196,8 @@ class ConsensusSiever(ConsensusBase):
             candidate_block = self.__build_candidate_block(block_builder, ExternalAddress.fromhex_address(next_leader))
             candidate_block, invoke_results = self._blockchain.score_invoke(
                 candidate_block, last_block, is_block_editable=True)
+            if candidate_block.header.version != "0.1a":
+                next_leader = candidate_block.header.next_leader.hex_hx()
 
             util.logger.spam(f"candidate block : {candidate_block.header}")
 
