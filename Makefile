@@ -19,7 +19,7 @@ else ifeq ($(UNAME), Linux)
 endif
 
 CLEAN_TARGETS := clean-process clean-mq clean-pyc clean-db clean-log clean-test
-TEST_CMD := pytest -vv
+TEST_CMD := pytest -xvrs  # x: fast-fail, v: verbose, r+s: show report about s marked test (skipped)
 
 help:
 	@awk '/^#/{c=substr($$0,3);next}c&&/^[[:alpha:]][-_[:alnum:]]+:/{print substr($$1,1,index($$1,":")),c}1{c=0}'\
@@ -85,7 +85,8 @@ unit-test:
 
 integration-test:
 	@echo "Start integration test..."
-	$(TEST_CMD) testcase/integration || exit -1
+	$(TEST_CMD) testcase/integration/configure && \
+	$(TEST_CMD) testcase/integration/scenarios || exit -1
 
 ## Clean all - clean-process clean-mq clean-pyc clean-db clean-log clean-test
 clean: $(CLEAN_TARGETS) check
