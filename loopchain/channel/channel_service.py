@@ -242,8 +242,11 @@ class ChannelService:
         self.__block_manager.blockchain.rebuild_made_block_count()
 
     def update_sub_services_properties(self):
-        nid = self.__block_manager.blockchain.find_nid()
-        self.__inner_service.update_sub_services_properties(nid=int(nid, 16))
+        nid = int(self.__block_manager.blockchain.find_nid(), 16)
+        node_type = ChannelProperty().node_type.value,
+        relay_target = ChannelProperty().rs_target
+
+        self.__inner_service.update_sub_services_properties(nid=nid, node_type=node_type, relay_target=relay_target)
 
     def __get_role_switch_block_height(self):
         return self.get_channel_option().get('role_switch_block_height', -1)
@@ -295,10 +298,7 @@ class ChannelService:
             new_node_type = self._get_node_type_by_peer_list()
             utils.logger.info(f"Role switching to new node type: {new_node_type.name}")
             ChannelProperty().node_type = new_node_type
-        self.__inner_service.update_sub_services_properties(
-            node_type=ChannelProperty().node_type.value,
-            relay_target=ChannelProperty().rs_target
-        )
+        self.update_sub_services_properties()
 
     def switch_role(self, force: bool=False):
         self.peer_manager.update_all_peers()
