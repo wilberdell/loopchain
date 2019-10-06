@@ -876,6 +876,7 @@ class BlockChain:
 
             confirm_info = current_block.body.prev_votes if current_block.header.version == "0.3" else None
             self.add_block(unconfirmed_block, confirm_info)
+            self.__block_manager.new_epoch()
             self.last_unconfirmed_block = current_block
             candidate_blocks.remove_block(current_block.header.prev_hash)
 
